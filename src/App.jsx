@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import './App.css'
+
+const STORAGE_KEY = 'fotodrop-local-proof'
 
 function formatDisplayDate(dateValue) {
   if (!dateValue) {
@@ -19,13 +21,38 @@ function formatPrice(priceValue) {
   return `NZ$${priceValue}`
 }
 
+function loadSavedProof() {
+  try {
+    const savedProof = window.localStorage.getItem(STORAGE_KEY)
+
+    if (!savedProof) {
+      return null
+    }
+
+    return JSON.parse(savedProof)
+  } catch {
+    return null
+  }
+}
+
 function App() {
   const testBrandName = 'KlickPix'
+  const savedProof = loadSavedProof()
 
-  const [drop, setDrop] = useState(null)
+  const [drop, setDrop] = useState(savedProof?.drop || null)
   const [photos, setPhotos] = useState([])
-  const [buyer, setBuyer] = useState(null)
-  const [page, setPage] = useState('setup')
+  const [buyer, setBuyer] = useState(savedProof?.buyer || null)
+  const [page, setPage] = useState(savedProof?.page || 'setup')
+
+  useEffect(() => {
+    const proofToSave = {
+      drop,
+      buyer,
+      page,
+    }
+
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(proofToSave))
+  }, [drop, buyer, page])
 
   function handleCreateDrop(event) {
     event.preventDefault()
@@ -47,6 +74,8 @@ function App() {
   }
 
   function handleEditDrop() {
+    window.localStorage.removeItem(STORAGE_KEY)
+
     setDrop(null)
     setPhotos([])
     setBuyer(null)
@@ -221,6 +250,13 @@ function App() {
                 />
               </label>
             </div>
+
+            {photos.length === 0 && (
+              <p className="support">
+                If you refreshed the page, reselect photos for this local proof.
+                Drop details are saved, but browser photo previews are temporary.
+              </p>
+            )}
 
             {photos.length > 0 && (
               <>
@@ -434,6 +470,13 @@ function App() {
               Browse the event photos. Buy one image or unlock the full event before
               this drop closes.
             </p>
+
+            {photos.length === 0 && (
+              <p className="support">
+                No photo previews are loaded. Go back to manage photos and reselect images
+                for this local proof.
+              </p>
+            )}
 
             {photos.length > 0 && (
               <div
