@@ -1,9 +1,9 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;750;800;850&display=swap");
+
 :root {
   color: #222222;
   background: #e8e8e8;
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
+  font-family: "Manrope", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 * {
@@ -15,6 +15,7 @@ body {
   min-height: 100vh;
   margin: 0;
   background: #e8e8e8;
+  font-family: "Manrope", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 button,
@@ -49,7 +50,7 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 38px;
+  margin-bottom: 32px;
 }
 
 .brand-button {
@@ -57,10 +58,10 @@ button:disabled {
   border: 0;
   background: transparent;
   color: #222222;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 2rem;
-  font-weight: 700;
-  letter-spacing: -0.06em;
+  font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: -0.045em;
 }
 
 .deck-nav {
@@ -82,11 +83,27 @@ button:disabled {
 
 .studio-view {
   display: grid;
-  gap: 24px;
+  gap: 20px;
 }
 
-.studio-intro {
-  max-width: 760px;
+.studio-title-row {
+  width: 100%;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.collections-title {
+  width: 100%;
+  max-width: none;
+  margin: 0 auto;
+  color: #222222;
+  font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  text-align: center;
 }
 
 .soft-label {
@@ -102,15 +119,15 @@ h1,
 h2 {
   margin: 0;
   color: #222222;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
   font-weight: 700;
   letter-spacing: -0.065em;
 }
 
 h1 {
   max-width: 880px;
-  font-size: clamp(2.7rem, 7vw, 7rem);
-  line-height: 0.92;
+  font-size: clamp(2.2rem, 5vw, 4.8rem);
+  line-height: 0.98;
 }
 
 h2 {
@@ -167,27 +184,34 @@ h2 {
 }
 
 .photo-loader {
-  position: relative;
-  min-height: 150px;
+  min-height: 110px;
   display: grid;
   place-items: center;
-  border-radius: 28px;
+  border-radius: 24px;
   background: #cfcfcf;
-  overflow: hidden;
 }
 
-.photo-loader span {
-  color: #222222;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 2rem;
-  font-weight: 700;
-  letter-spacing: -0.04em;
+.photo-loader-button {
+  display: grid;
+  place-items: center;
+  min-width: 190px;
+  min-height: 50px;
+  border-radius: 999px;
+  background: #2b2b2b;
+  color: #f2f2f2;
+  font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 850;
+  letter-spacing: -0.015em;
+  cursor: pointer;
 }
 
 .photo-loader input {
+  width: 1px;
+  height: 1px;
   position: absolute;
-  inset: 0;
   opacity: 0;
+  pointer-events: none;
 }
 
 .studio-preview,
@@ -224,8 +248,8 @@ h2 {
 .empty-photo-space {
   display: grid;
   place-items: center;
-  min-height: 280px;
-  border-radius: 28px;
+  min-height: 180px;
+  border-radius: 24px;
   background: #cfcfcf;
   color: #666666;
   font-weight: 750;
@@ -234,15 +258,15 @@ h2 {
 .image-mosaic,
 .customer-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .mosaic-card,
 .customer-photo {
   position: relative;
   overflow: hidden;
-  border-radius: 28px;
+  border-radius: 22px;
   background: #cfcfcf;
 }
 
@@ -250,24 +274,8 @@ h2 {
 .customer-photo img {
   display: block;
   width: 100%;
-  height: 290px;
+  height: 180px;
   object-fit: cover;
-}
-
-.mosaic-card span,
-.customer-photo button span,
-.lightbox-image span {
-  position: absolute;
-  right: 14px;
-  bottom: 14px;
-  padding: 7px 10px;
-  border-radius: 999px;
-  background: rgba(242, 242, 242, 0.7);
-  color: rgba(40, 40, 40, 0.5);
-  font-size: 0.75rem;
-  font-weight: 850;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
 }
 
 .entry-view {
@@ -286,6 +294,10 @@ h2 {
   margin-top: 26px;
 }
 
+.collection-heading > div {
+  min-width: 0;
+}
+
 .price-mark {
   border-radius: 999px;
   padding: 10px 14px;
@@ -293,6 +305,84 @@ h2 {
   color: #333333;
   font-weight: 850;
   white-space: nowrap;
+}
+
+.wall-grid-five {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.wall-tile,
+.empty-wall-tile {
+  position: relative;
+  min-height: 180px;
+  overflow: hidden;
+  border-radius: 24px;
+  background: #cfcfcf;
+}
+
+.wall-tile {
+  border: 0;
+  cursor: pointer;
+}
+
+.wall-tile img {
+  display: block;
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+}
+
+.wall-tile-label {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 3;
+  overflow: hidden;
+  border-radius: 999px;
+  padding: 8px 10px;
+  background: rgba(242, 242, 242, 0.78);
+  color: #222222;
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wall-tile-stacked {
+  display: grid;
+  grid-template-rows: 180px auto;
+  min-height: 0;
+  padding: 0;
+}
+
+.wall-tile-media {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px 24px 0 0;
+  background: #cfcfcf;
+}
+
+.wall-tile-media img {
+  display: block;
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+}
+
+.wall-tile-name-below {
+  padding: 10px 12px 12px;
+  background: #d9d9d9;
+  color: #222222;
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1.25;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .customer-photo > button {
@@ -308,14 +398,14 @@ h2 {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
-  padding: 12px;
+  padding: 10px;
   background: #d9d9d9;
 }
 
 .buy-row > span {
   overflow: hidden;
   color: #555555;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -324,11 +414,53 @@ h2 {
 .buy-row button {
   border: 0;
   border-radius: 999px;
-  padding: 8px 11px;
+  padding: 8px 10px;
   background: #cfcfcf;
   color: #222222;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 850;
+}
+
+.back-button {
+  margin-top: 18px;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: #cfcfcf;
+  color: #222222;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.watermark-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-content: center;
+  justify-items: center;
+  gap: 10px 16px;
+  padding: 14px;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.watermark-layer span {
+  position: static;
+  display: inline-block;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transform: rotate(-32deg);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
 }
 
 .lightbox {
@@ -365,7 +497,6 @@ h2 {
 }
 
 .lightbox-image {
-  position: relative;
   display: grid;
   place-items: center;
   min-height: min(68vh, 720px);
@@ -374,30 +505,108 @@ h2 {
   overflow: hidden;
 }
 
-.lightbox-image img {
+.lightbox-photo-frame {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  max-height: 68vh;
+  overflow: hidden;
+  border-radius: 24px;
+}
+
+.lightbox-photo-frame img {
   display: block;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   max-height: 68vh;
   object-fit: contain;
+}
+
+.lightbox-photo-frame .watermark-layer {
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-content: center;
+  justify-items: center;
+  gap: 34px 92px;
+  padding: 10% 12%;
+}
+
+.lightbox-photo-frame .watermark-layer span {
+  color: rgba(255, 255, 255, 0.32);
+  font-size: clamp(0.8rem, 1.4vw, 1.15rem);
+  letter-spacing: 0.2em;
+  transform: rotate(-32deg);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
 }
 
 .lightbox-bottom {
   margin-bottom: 0;
 }
 
-@media (max-width: 960px) {
-  .studio-fields,
-  .image-mosaic,
-  .customer-grid {
+@media (max-width: 1100px) {
+  .studio-fields {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .image-mosaic,
+  .customer-grid,
+  .wall-grid-five {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .lightbox-photo-frame .watermark-layer {
+    gap: 28px 64px;
+    padding: 10% 9%;
+  }
+}
+
+@media (max-width: 760px) {
   .preview-heading,
   .collection-heading,
   .lightbox-top,
   .lightbox-bottom {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .image-mosaic,
+  .customer-grid,
+  .wall-grid-five {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mosaic-card img,
+  .customer-photo img,
+  .wall-tile img,
+  .wall-tile-media img,
+  .wall-tile,
+  .empty-wall-tile {
+    height: 170px;
+    min-height: 170px;
+  }
+
+  .wall-tile-stacked {
+    grid-template-rows: 170px auto;
+    min-height: 0;
+  }
+
+  .watermark-layer {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px 12px;
+  }
+
+  .watermark-layer span {
+    font-size: 0.6rem;
+  }
+
+  .lightbox-photo-frame .watermark-layer {
+    gap: 24px 42px;
+    padding: 12% 8%;
+  }
+
+  .lightbox-photo-frame .watermark-layer span {
+    font-size: 0.78rem;
   }
 }
 
@@ -413,30 +622,71 @@ h2 {
   }
 
   .brand-button {
-    font-size: 1.75rem;
+    font-size: 1.45rem;
   }
 
   h1 {
-    font-size: clamp(2.8rem, 16vw, 4.2rem);
+    font-size: clamp(2.2rem, 12vw, 3.4rem);
+  }
+
+  .collections-title {
+    font-size: 28px;
   }
 
   .studio-fields,
   .image-mosaic,
-  .customer-grid {
+  .customer-grid,
+  .wall-grid-five {
     grid-template-columns: 1fr;
   }
 
   .mosaic-card img,
-  .customer-photo img {
-    height: 320px;
+  .customer-photo img,
+  .wall-tile img,
+  .wall-tile-media img,
+  .wall-tile,
+  .empty-wall-tile {
+    height: 220px;
+    min-height: 220px;
+  }
+
+  .wall-tile-stacked {
+    grid-template-rows: 220px auto;
+    min-height: 0;
   }
 
   .dark-action,
-  .lightbox-bottom button {
+  .lightbox-bottom button,
+  .photo-loader-button {
     width: 100%;
+  }
+
+  .watermark-layer {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px 10px;
+    padding: 12px;
+  }
+
+  .watermark-layer span {
+    font-size: 0.56rem;
+    letter-spacing: 0.12em;
+  }
+
+  .lightbox-photo-frame .watermark-layer {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 22px 34px;
+    padding: 12% 8%;
+  }
+
+  .lightbox-photo-frame .watermark-layer span {
+    font-size: 0.68rem;
   }
 
   .lightbox {
     padding: 14px;
   }
+}
+
+.structure-line {
+  white-space: nowrap;
 }
