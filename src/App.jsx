@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import './App.css'
 
 function App() {
@@ -10,6 +10,8 @@ function App() {
   const [photos, setPhotos] = useState([])
   const [customer, setCustomer] = useState(null)
   const [selectedPhoto, setSelectedPhoto] = useState(null)
+  const [d1ProofStatus, setD1ProofStatus] = useState('Not checked')
+  const [d1ProofImage, setD1ProofImage] = useState(null)
 
   function handlePhotoSelection(event) {
     const files = Array.from(event.target.files || [])
@@ -22,6 +24,32 @@ function App() {
 
     setPhotos(selectedPhotos)
     event.target.value = ''
+  }
+
+  async function handleD1ImageProof() {
+    setD1ProofStatus('Checking D1 image proof...')
+    setD1ProofImage(null)
+
+    try {
+      const response = await fetch('/api/images-proof')
+      const result = await response.json()
+
+      if (!response.ok || !result.ok || !result.image) {
+        setD1ProofStatus(result.error || 'D1 image proof failed')
+        return
+      }
+
+      const image = result.image
+
+      setD1ProofImage(image)
+      setGalleryName(image.collection_name || 'Brackenfield')
+      setEventName(image.event_name || 'Champagne Breakfast')
+      setSingleImagePrice(String((image.price_cents || 0) / 100))
+      setWatermarkText(image.watermark_text || 'FotoDeck')
+      setD1ProofStatus('D1 image proof passed')
+    } catch (error) {
+      setD1ProofStatus(error.message || 'D1 image proof failed')
+    }
   }
 
   function handleCustomerEntry(event) {
@@ -47,6 +75,8 @@ function App() {
     setPhotos([])
     setCustomer(null)
     setSelectedPhoto(null)
+    setD1ProofStatus('Not checked')
+    setD1ProofImage(null)
   }
 
   function handleAdminReturn() {
@@ -193,6 +223,10 @@ function App() {
                   multiple
                   onChange={handlePhotoSelection}
                 />
+
+                <button className="photo-loader-button" type="button" onClick={handleD1ImageProof}>
+                  Read D1 image proof
+                </button>
               </div>
             </section>
 
@@ -206,6 +240,25 @@ function App() {
                 >
                   Open customer view
                 </button>
+              </div>
+
+              <div className="empty-photo-space">
+                <strong>{d1ProofStatus}</strong>
+
+                {d1ProofImage && (
+                  <>
+                    <br />
+                    File: {d1ProofImage.file_name}
+                    <br />
+                    Gallery: {d1ProofImage.collection_name}
+                    <br />
+                    Event: {d1ProofImage.event_name}
+                    <br />
+                    Price: NZ${singleImagePrice}
+                    <br />
+                    Display key: {d1ProofImage.display_key}
+                  </>
+                )}
               </div>
 
               {photos.length === 0 && (
