@@ -43,6 +43,7 @@ function App() {
   const [photos, setPhotos] = useState([])
   const [buyer, setBuyer] = useState(savedProof?.buyer || null)
   const [page, setPage] = useState(savedProof?.page || 'setup')
+  const [inspectionPhoto, setInspectionPhoto] = useState(null)
 
   useEffect(() => {
     const proofToSave = {
@@ -70,6 +71,7 @@ function App() {
     setDrop(newDrop)
     setPhotos([])
     setBuyer(null)
+    setInspectionPhoto(null)
     setPage('manage')
   }
 
@@ -79,6 +81,7 @@ function App() {
     setDrop(null)
     setPhotos([])
     setBuyer(null)
+    setInspectionPhoto(null)
     setPage('setup')
   }
 
@@ -93,23 +96,36 @@ function App() {
     }))
 
     setPhotos(selectedPhotos)
+    setInspectionPhoto(null)
   }
 
   function showVisitorDetailsPage() {
     setBuyer(null)
+    setInspectionPhoto(null)
     setPage('visitor-details')
   }
 
   function showEventWallPage() {
+    setInspectionPhoto(null)
     setPage('event-wall')
   }
 
   function showManagePhotosPage() {
+    setInspectionPhoto(null)
     setPage('manage')
   }
 
   function showPhotoPage() {
+    setInspectionPhoto(null)
     setPage('public-drop')
+  }
+
+  function openInspectionPhoto(photo) {
+    setInspectionPhoto(photo)
+  }
+
+  function closeInspectionPhoto() {
+    setInspectionPhoto(null)
   }
 
   function handleVisitorDetails(event) {
@@ -124,6 +140,7 @@ function App() {
     }
 
     setBuyer(newBuyer)
+    setInspectionPhoto(null)
     setPage('event-wall')
   }
 
@@ -467,8 +484,7 @@ function App() {
             </div>
 
             <p className="support">
-              Browse the event photos. Buy one image or unlock the full event before
-              this drop closes.
+              Browse the event photos. Click any image to inspect it larger before buying.
             </p>
 
             {photos.length === 0 && (
@@ -542,12 +558,18 @@ function App() {
                       background: 'rgba(248, 250, 252, 0.08)',
                     }}
                   >
-                    <div
+                    <button
+                      type="button"
+                      onClick={() => openInspectionPhoto(photo)}
                       style={{
                         display: 'grid',
                         placeItems: 'center',
+                        width: '100%',
                         minHeight: '220px',
+                        padding: 0,
+                        border: 0,
                         background: 'rgba(2, 6, 23, 0.62)',
+                        cursor: 'zoom-in',
                       }}
                     >
                       <img
@@ -560,7 +582,7 @@ function App() {
                           objectFit: 'contain',
                         }}
                       />
-                    </div>
+                    </button>
 
                     <div
                       style={{
@@ -611,6 +633,139 @@ function App() {
               Back to event wall
             </button>
           </section>
+        )}
+
+        {inspectionPhoto && drop && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Inspect photo"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 50,
+              display: 'grid',
+              placeItems: 'center',
+              padding: '24px',
+              background: 'rgba(2, 6, 23, 0.88)',
+              backdropFilter: 'blur(10px)',
+            }}
+          >
+            <section
+              style={{
+                width: 'min(100%, 1180px)',
+                maxHeight: '92vh',
+                display: 'grid',
+                gap: '16px',
+                padding: '18px',
+                border: '1px solid rgba(248, 250, 252, 0.16)',
+                borderRadius: '28px',
+                background: 'rgba(15, 23, 42, 0.96)',
+                boxShadow: '0 28px 80px rgba(0, 0, 0, 0.52)',
+              }}
+            >
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(0, 1fr) auto',
+                  alignItems: 'center',
+                  gap: '14px',
+                }}
+              >
+                <div
+                  style={{
+                    minWidth: 0,
+                    color: '#e2e8f0',
+                    fontSize: '1rem',
+                    fontWeight: '900',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    textAlign: 'left',
+                  }}
+                >
+                  {inspectionPhoto.name}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeInspectionPhoto}
+                  style={{
+                    padding: '9px 14px',
+                    border: '1px solid rgba(248, 250, 252, 0.22)',
+                    borderRadius: '999px',
+                    background: 'rgba(248, 250, 252, 0.08)',
+                    color: '#f8fafc',
+                    fontSize: '0.86rem',
+                    fontWeight: '950',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  placeItems: 'center',
+                  minHeight: 'min(68vh, 720px)',
+                  border: '1px solid rgba(248, 250, 252, 0.1)',
+                  borderRadius: '22px',
+                  background: 'rgba(2, 6, 23, 0.68)',
+                  overflow: 'hidden',
+                }}
+              >
+                <img
+                  src={inspectionPhoto.previewUrl}
+                  alt={inspectionPhoto.name}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    maxHeight: '68vh',
+                    objectFit: 'contain',
+                  }}
+                />
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(0, 1fr) auto',
+                  alignItems: 'center',
+                  gap: '14px',
+                }}
+              >
+                <div
+                  style={{
+                    color: '#cbd5e1',
+                    fontSize: '0.95rem',
+                    fontWeight: '800',
+                    textAlign: 'left',
+                  }}
+                >
+                  Inspect before buying.
+                </div>
+
+                <button
+                  type="button"
+                  style={{
+                    padding: '11px 16px',
+                    border: '1px solid rgba(56, 189, 248, 0.52)',
+                    borderRadius: '999px',
+                    background: 'rgba(56, 189, 248, 0.16)',
+                    color: '#e0f2fe',
+                    fontSize: '0.9rem',
+                    fontWeight: '950',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Buy {formatPrice(drop.singlePhotoPrice)}
+                </button>
+              </div>
+            </section>
+          </div>
         )}
       </section>
     </main>
