@@ -1,0 +1,7 @@
+﻿name = "fotodrop"
+compatibility_date = "2026-05-03"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "fotodrop-local"
+database_id = "local"
