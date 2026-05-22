@@ -1,11 +1,12 @@
 ﻿name = "fotodrop"
 compatibility_date = "2026-05-03"
+pages_build_output_dir = "dist"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "fotodrop-local"
-database_id = "local"
+database_name = "fotodrop-db"
+database_id = "4166aa4e-bd3e-402d-9990-3dbd0c2e6e66"
 
 [[r2_buckets]]
 binding = "DISPLAY_BUCKET"
-bucket_name = "fotodrop-display-local"
+bucket_name = "fotodeck-display"
