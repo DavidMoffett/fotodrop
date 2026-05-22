@@ -1,6 +1,16 @@
 ﻿import { useState } from 'react'
 import './App.css'
 
+function makeSafeId(value, fallback) {
+  const text = value ? String(value).trim().toLowerCase() : ''
+
+  const safe = text
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+  return safe || fallback
+}
+
 function App() {
   const [view, setView] = useState('studio')
   const [galleryName, setGalleryName] = useState('Brackenfield')
@@ -12,17 +22,58 @@ function App() {
   const [selectedPhoto, setSelectedPhoto] = useState(null)
   const [d1ProofStatus, setD1ProofStatus] = useState('Not checked')
   const [d1ProofImage, setD1ProofImage] = useState(null)
+  const [uploadStatus, setUploadStatus] = useState('No upload yet')
 
-  function handlePhotoSelection(event) {
+  async function handlePhotoSelection(event) {
     const files = Array.from(event.target.files || [])
 
-    const selectedPhotos = files.map((file, index) => ({
-      id: `${file.name}-${file.lastModified}-${index}`,
-      name: file.name,
-      previewUrl: URL.createObjectURL(file),
-    }))
+    if (files.length === 0) {
+      return
+    }
 
-    setPhotos(selectedPhotos)
+    setUploadStatus(`Uploading ${files.length} image${files.length === 1 ? '' : 's'}...`)
+
+    const collectionId = makeSafeId(galleryName, 'default-collection')
+    const eventId = makeSafeId(eventName, 'default-event')
+    const uploadedPhotos = []
+
+    for (const file of files) {
+      const formData = new FormData()
+
+      formData.append('file', file)
+      formData.append('collectionId', collectionId)
+      formData.append('collectionName', galleryName || 'Untitled Collection')
+      formData.append('eventId', eventId)
+      formData.append('eventName', eventName || 'Untitled Event')
+      formData.append('watermarkText', watermarkText || 'FotoDeck')
+      formData.append('price', singleImagePrice || '0')
+
+      const response = await fetch('/api/upload-display', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const result = await response.json()
+
+      if (!response.ok || !result.ok || !result.image) {
+        setUploadStatus(result.error || 'Upload failed')
+        event.target.value = ''
+        return
+      }
+
+      uploadedPhotos.push({
+        id: result.image.id,
+        name: result.image.file_name || file.name,
+        previewUrl: URL.createObjectURL(file),
+        displayKey: result.image.display_key,
+        eventName: result.image.event_name,
+        collectionName: result.image.collection_name,
+        priceCents: result.image.price_cents,
+      })
+    }
+
+    setPhotos((currentPhotos) => [...currentPhotos, ...uploadedPhotos])
+    setUploadStatus(`Uploaded ${uploadedPhotos.length} image${uploadedPhotos.length === 1 ? '' : 's'} to R2 and D1`)
     event.target.value = ''
   }
 
@@ -77,6 +128,7 @@ function App() {
     setSelectedPhoto(null)
     setD1ProofStatus('Not checked')
     setD1ProofImage(null)
+    setUploadStatus('No upload yet')
   }
 
   function handleAdminReturn() {
@@ -240,6 +292,10 @@ function App() {
                 >
                   Open customer view
                 </button>
+              </div>
+
+              <div className="empty-photo-space">
+                <strong>{uploadStatus}</strong>
               </div>
 
               <div className="empty-photo-space">
