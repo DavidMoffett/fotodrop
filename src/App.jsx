@@ -11,6 +11,14 @@ function makeSafeId(value, fallback) {
   return safe || fallback
 }
 
+function makeDisplayImageUrl(displayKey) {
+  if (!displayKey) {
+    return ''
+  }
+
+  return `/api/display-image?key=${encodeURIComponent(displayKey)}`
+}
+
 function App() {
   const [view, setView] = useState('studio')
   const [galleryName, setGalleryName] = useState('Brackenfield')
@@ -23,6 +31,18 @@ function App() {
   const [d1ProofStatus, setD1ProofStatus] = useState('Not checked')
   const [d1ProofImage, setD1ProofImage] = useState(null)
   const [uploadStatus, setUploadStatus] = useState('No upload yet')
+
+  function mapSavedImageToPhoto(image) {
+    return {
+      id: image.id,
+      name: image.file_name,
+      previewUrl: makeDisplayImageUrl(image.display_key),
+      displayKey: image.display_key,
+      eventName: image.event_name,
+      collectionName: image.collection_name,
+      priceCents: image.price_cents,
+    }
+  }
 
   async function handlePhotoSelection(event) {
     const files = Array.from(event.target.files || [])
@@ -61,18 +81,10 @@ function App() {
         return
       }
 
-      uploadedPhotos.push({
-        id: result.image.id,
-        name: result.image.file_name || file.name,
-        previewUrl: URL.createObjectURL(file),
-        displayKey: result.image.display_key,
-        eventName: result.image.event_name,
-        collectionName: result.image.collection_name,
-        priceCents: result.image.price_cents,
-      })
+      uploadedPhotos.push(mapSavedImageToPhoto(result.image))
     }
 
-    setPhotos((currentPhotos) => [...currentPhotos, ...uploadedPhotos])
+    setPhotos((currentPhotos) => [...uploadedPhotos, ...currentPhotos])
     setUploadStatus(`Uploaded ${uploadedPhotos.length} image${uploadedPhotos.length === 1 ? '' : 's'} to R2 and D1`)
     event.target.value = ''
   }
@@ -91,13 +103,15 @@ function App() {
       }
 
       const image = result.images[0]
+      const savedPhotos = result.images.map(mapSavedImageToPhoto)
 
+      setPhotos(savedPhotos)
       setD1ProofImage(image)
       setGalleryName(image.collection_name || 'Brackenfield')
       setEventName(image.event_name || 'Champagne Breakfast')
       setSingleImagePrice(String((image.price_cents || 0) / 100))
       setWatermarkText(image.watermark_text || 'FotoDeck')
-      setD1ProofStatus('D1 images read passed')
+      setD1ProofStatus(`D1 images read passed: ${savedPhotos.length} image${savedPhotos.length === 1 ? '' : 's'} loaded`)
     } catch (error) {
       setD1ProofStatus(error.message || 'D1 images read failed')
     }
@@ -277,7 +291,7 @@ function App() {
                 />
 
                 <button className="photo-loader-button" type="button" onClick={handleD1ImageProof}>
-                  Read D1 images read
+                  Load saved images
                 </button>
               </div>
             </section>
@@ -296,25 +310,6 @@ function App() {
 
               <div className="empty-photo-space">
                 <strong>{uploadStatus}</strong>
-              </div>
-
-              <div className="empty-photo-space">
-                <strong>{d1ProofStatus}</strong>
-
-                {d1ProofImage && (
-                  <>
-                    <br />
-                    File: {d1ProofImage.file_name}
-                    <br />
-                    Gallery: {d1ProofImage.collection_name}
-                    <br />
-                    Event: {d1ProofImage.event_name}
-                    <br />
-                    Price: NZ${singleImagePrice}
-                    <br />
-                    Display key: {d1ProofImage.display_key}
-                  </>
-                )}
               </div>
 
               {photos.length === 0 && (
@@ -535,3 +530,4 @@ function App() {
 }
 
 export default App
+
