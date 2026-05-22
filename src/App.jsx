@@ -19,28 +19,53 @@ function makeDisplayImageUrl(displayKey) {
   return `/api/display-image?key=${encodeURIComponent(displayKey)}`
 }
 
+function formatUploadedTime(value) {
+  if (!value) {
+    return 'Uploaded time not available'
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value)
+  }
+
+  return date.toLocaleString()
+}
+
+function getUploadedTime(image) {
+  return (
+    image.uploaded_at ||
+    image.created_at ||
+    image.inserted_at ||
+    image.saved_at ||
+    image.createdAt ||
+    image.uploadedAt ||
+    ''
+  )
+}
+
 function App() {
-  const [view, setView] = useState('studio')
-  const [galleryName, setGalleryName] = useState('Brackenfield')
-  const [eventName, setEventName] = useState('Champagne Breakfast')
+  const [collectionName, setCollectionName] = useState('PhotoDeck')
+  const [eventName, setEventName] = useState('Uploaded Images')
   const [singleImagePrice, setSingleImagePrice] = useState('7')
-  const [watermarkText, setWatermarkText] = useState('FotoDeck')
+  const [watermarkText, setWatermarkText] = useState('PhotoDeck')
   const [photos, setPhotos] = useState([])
-  const [customer, setCustomer] = useState(null)
   const [selectedPhoto, setSelectedPhoto] = useState(null)
-  const [d1ProofStatus, setD1ProofStatus] = useState('Not checked')
-  const [d1ProofImage, setD1ProofImage] = useState(null)
+  const [loadStatus, setLoadStatus] = useState('No images loaded yet')
   const [uploadStatus, setUploadStatus] = useState('No upload yet')
 
   function mapSavedImageToPhoto(image) {
     return {
-      id: image.id,
-      name: image.file_name,
+      id: image.id || image.display_key || image.file_name,
+      name: image.file_name || image.name || 'Unnamed image',
       previewUrl: makeDisplayImageUrl(image.display_key),
-      displayKey: image.display_key,
-      eventName: image.event_name,
-      collectionName: image.collection_name,
-      priceCents: image.price_cents,
+      displayKey: image.display_key || '',
+      eventName: image.event_name || '',
+      collectionName: image.collection_name || '',
+      priceCents: image.price_cents || 0,
+      uploadedTime: getUploadedTime(image),
+      watermarkText: image.watermark_text || '',
     }
   }
 
@@ -53,8 +78,8 @@ function App() {
 
     setUploadStatus(`Uploading ${files.length} image${files.length === 1 ? '' : 's'}...`)
 
-    const collectionId = makeSafeId(galleryName, 'default-collection')
-    const eventId = makeSafeId(eventName, 'default-event')
+    const collectionId = makeSafeId(collectionName, 'photodeck')
+    const eventId = makeSafeId(eventName, 'uploaded-images')
     const uploadedPhotos = []
 
     for (const file of files) {
@@ -62,10 +87,10 @@ function App() {
 
       formData.append('file', file)
       formData.append('collectionId', collectionId)
-      formData.append('collectionName', galleryName || 'Untitled Collection')
+      formData.append('collectionName', collectionName || 'PhotoDeck')
       formData.append('eventId', eventId)
-      formData.append('eventName', eventName || 'Untitled Event')
-      formData.append('watermarkText', watermarkText || 'FotoDeck')
+      formData.append('eventName', eventName || 'Uploaded Images')
+      formData.append('watermarkText', watermarkText || 'PhotoDeck')
       formData.append('price', singleImagePrice || '0')
 
       const response = await fetch('/api/upload-display', {
@@ -86,84 +111,48 @@ function App() {
 
     setPhotos((currentPhotos) => [...uploadedPhotos, ...currentPhotos])
     setUploadStatus(`Uploaded ${uploadedPhotos.length} image${uploadedPhotos.length === 1 ? '' : 's'} to R2 and D1`)
+    setLoadStatus(`${uploadedPhotos.length} new image${uploadedPhotos.length === 1 ? '' : 's'} added`)
     event.target.value = ''
   }
 
-  async function handleD1ImageProof() {
-    setD1ProofStatus('Checking D1 images read...')
-    setD1ProofImage(null)
+  async function handleLoadSavedImages() {
+    setLoadStatus('Loading saved images...')
 
     try {
       const response = await fetch('/api/images')
       const result = await response.json()
 
       if (!response.ok || !result.ok || !result.images || result.images.length === 0) {
-        setD1ProofStatus(result.error || 'D1 images read failed')
+        setLoadStatus(result.error || 'No saved images found')
         return
       }
 
-      const image = result.images[0]
       const savedPhotos = result.images.map(mapSavedImageToPhoto)
 
       setPhotos(savedPhotos)
-      setD1ProofImage(image)
-      setGalleryName(image.collection_name || 'Brackenfield')
-      setEventName(image.event_name || 'Champagne Breakfast')
-      setSingleImagePrice(String((image.price_cents || 0) / 100))
-      setWatermarkText(image.watermark_text || 'FotoDeck')
-      setD1ProofStatus(`D1 images read passed: ${savedPhotos.length} image${savedPhotos.length === 1 ? '' : 's'} loaded`)
+      setLoadStatus(`Loaded ${savedPhotos.length} saved image${savedPhotos.length === 1 ? '' : 's'}`)
     } catch (error) {
-      setD1ProofStatus(error.message || 'D1 images read failed')
+      setLoadStatus(error.message || 'Saved images could not be loaded')
     }
   }
 
-  function handleCustomerEntry(event) {
-    event.preventDefault()
-
-    const formData = new FormData(event.currentTarget)
-
-    setCustomer({
-      name: formData.get('customerName'),
-      phone: formData.get('customerPhone'),
-      email: formData.get('customerEmail'),
-    })
-
-    setView('gallery-wall')
-  }
-
-  function resetConcept() {
-    setView('studio')
-    setGalleryName('Brackenfield')
-    setEventName('Champagne Breakfast')
+  function handleReset() {
+    setCollectionName('PhotoDeck')
+    setEventName('Uploaded Images')
     setSingleImagePrice('7')
-    setWatermarkText('FotoDeck')
+    setWatermarkText('PhotoDeck')
     setPhotos([])
-    setCustomer(null)
     setSelectedPhoto(null)
-    setD1ProofStatus('Not checked')
-    setD1ProofImage(null)
+    setLoadStatus('No images loaded yet')
     setUploadStatus('No upload yet')
   }
 
-  function handleAdminReturn() {
-    const answer = window.prompt('Security word')
-
-    if (answer && answer.trim().toLowerCase() === 'funga safari') {
-      setSelectedPhoto(null)
-      setView('studio')
-    }
-  }
-
-  function handlePurchaseStart(photo) {
-    setSelectedPhoto(photo)
-  }
-
   function handlePurchasePlaceholder() {
-    window.alert('Purchase flow next: this will connect to Cloudflare-backed payment/delivery logic.')
+    window.alert('Purchase flow next. Not connected yet.')
   }
 
   function renderWatermark(text) {
-    const mark = text && String(text).trim() ? text.trim() : 'FotoDeck'
+    const mark = text && String(text).trim() ? text.trim() : 'PhotoDeck'
     const items = Array.from({ length: 12 }, (_, index) => `${mark}-${index}`)
 
     return (
@@ -175,303 +164,108 @@ function App() {
     )
   }
 
-  const tileImage = photos[0]?.previewUrl || null
-  const isStudioView = view === 'studio'
-
   return (
     <main className="deck-page">
       <section className="deck-shell">
         <header className="deck-header">
-          <button
-            className="brand-button"
-            type="button"
-            onClick={() => {
-              if (isStudioView) {
-                setView('studio')
-              }
-            }}
-            aria-label="FotoDeck"
-          >
-            FotoDeck
+          <button className="brand-button" type="button" aria-label="PhotoDeck">
+            PhotoDeck
           </button>
 
-          {isStudioView && (
-            <nav className="deck-nav" aria-label="View selector">
-              <button type="button" onClick={() => setView('studio')}>
-                Studio
-              </button>
-              <button type="button" onClick={() => setView('entry')}>
-                Customer view
-              </button>
-              <button type="button" onClick={resetConcept}>
-                Reset
-              </button>
-            </nav>
-          )}
-
-          {!isStudioView && (
-            <button
-              type="button"
-              onClick={handleAdminReturn}
-              aria-label="Admin return"
-              title=""
-              style={{
-                width: '9px',
-                height: '9px',
-                padding: 0,
-                border: 0,
-                borderRadius: '999px',
-                background: 'rgba(34, 34, 34, 0.22)',
-                cursor: 'pointer',
-              }}
-            />
-          )}
+          <nav className="deck-nav" aria-label="Image controls">
+            <button type="button" onClick={handleLoadSavedImages}>
+              Load saved images
+            </button>
+            <button type="button" onClick={handleReset}>
+              Reset
+            </button>
+          </nav>
         </header>
 
-        {view === 'studio' && (
-          <section className="studio-view">
-            <div className="studio-title-row">
-              <h1 className="collections-title">Collections</h1>
-            </div>
+        <section className="studio-view">
+          <div className="studio-title-row">
+            <h1 className="collections-title">Uploaded Images</h1>
+          </div>
 
-            <section className="studio-panel">
-              <div className="studio-fields">
-                <label>
-                  Gallery
-                  <input
-                    type="text"
-                    value={galleryName}
-                    placeholder="Brackenfield"
-                    onChange={(event) => setGalleryName(event.target.value)}
-                  />
-                </label>
-
-                <label>
-                  Event
-                  <input
-                    type="text"
-                    value={eventName}
-                    placeholder="Champagne Breakfast"
-                    onChange={(event) => setEventName(event.target.value)}
-                  />
-                </label>
-
-                <label>
-                  Image price
-                  <input
-                    type="number"
-                    min="0"
-                    value={singleImagePrice}
-                    onChange={(event) => setSingleImagePrice(event.target.value)}
-                  />
-                </label>
-
-                <label>
-                  Watermark
-                  <input
-                    type="text"
-                    value={watermarkText}
-                    placeholder="Watermark text"
-                    onChange={(event) => setWatermarkText(event.target.value)}
-                  />
-                </label>
-              </div>
-
-              <div className="photo-loader">
-                <label className="photo-loader-button" htmlFor="photo-upload">
-                  Add images
-                </label>
-
+          <section className="studio-panel">
+            <div className="studio-fields">
+              <label>
+                Collection
                 <input
-                  id="photo-upload"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handlePhotoSelection}
+                  type="text"
+                  value={collectionName}
+                  placeholder="PhotoDeck"
+                  onChange={(event) => setCollectionName(event.target.value)}
                 />
+              </label>
 
-                <button className="photo-loader-button" type="button" onClick={handleD1ImageProof}>
-                  Load saved images
-                </button>
-              </div>
-            </section>
+              <label>
+                View name
+                <input
+                  type="text"
+                  value={eventName}
+                  placeholder="Uploaded Images"
+                  onChange={(event) => setEventName(event.target.value)}
+                />
+              </label>
 
-            <section className="studio-preview">
-              <div className="preview-heading">
-                <button
-                  className="dark-action"
-                  type="button"
-                  onClick={() => setView('entry')}
-                  disabled={photos.length === 0}
-                >
-                  Open customer view
-                </button>
-              </div>
+              <label>
+                Image price
+                <input
+                  type="number"
+                  min="0"
+                  value={singleImagePrice}
+                  onChange={(event) => setSingleImagePrice(event.target.value)}
+                />
+              </label>
 
-              <div className="empty-photo-space">
-                <strong>{uploadStatus}</strong>
-              </div>
+              <label>
+                Watermark
+                <input
+                  type="text"
+                  value={watermarkText}
+                  placeholder="PhotoDeck"
+                  onChange={(event) => setWatermarkText(event.target.value)}
+                />
+              </label>
+            </div>
 
-              {photos.length === 0 && (
-                <div className="empty-photo-space">
-                  Uploaded images will appear here.
-                </div>
-              )}
+            <div className="photo-loader">
+              <label className="photo-loader-button" htmlFor="photo-upload">
+                Add images
+              </label>
 
-              {photos.length > 0 && (
-                <div className="image-mosaic">
-                  {photos.map((photo) => (
-                    <article className="mosaic-card" key={photo.id}>
-                      <img src={photo.previewUrl} alt={photo.name} />
-                      {renderWatermark(watermarkText)}
-                    </article>
-                  ))}
-                </div>
-              )}
-            </section>
-          </section>
-        )}
+              <input
+                id="photo-upload"
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handlePhotoSelection}
+              />
 
-        {view === 'entry' && (
-          <section className="entry-view">
-            <div className="entry-card">
-              <p className="soft-label">
-                FotoDeck
-              </p>
-
-              <h1>{galleryName || 'Photo gallery'}</h1>
-
-              <p>
-                Enter your details to view the photo wall.
-              </p>
-
-              <form className="entry-form" onSubmit={handleCustomerEntry}>
-                <label>
-                  Name
-                  <input name="customerName" type="text" placeholder="Your name" required />
-                </label>
-
-                <label>
-                  Phone
-                  <input name="customerPhone" type="tel" placeholder="Your phone number" required />
-                </label>
-
-                <label>
-                  Email
-                  <input name="customerEmail" type="email" placeholder="you@example.com" required />
-                </label>
-
-                <button className="dark-action" type="submit">
-                  View photos
-                </button>
-              </form>
+              <button className="photo-loader-button" type="button" onClick={handleLoadSavedImages}>
+                Load saved images
+              </button>
             </div>
           </section>
-        )}
 
-        {view === 'gallery-wall' && (
-          <section className="collection-view">
-            <div className="collection-heading">
-              <div>
-                <p className="soft-label">
-                  FotoDeck
-                </p>
-
-                <h1>Collections</h1>
-
-                {customer && (
-                  <p className="customer-line">
-                    Welcome, {customer.name}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="wall-grid-five">
-              <article className="wall-tile" role="button" tabIndex="0" onClick={() => setView('event-wall')}>
-                {tileImage && <img src={tileImage} alt={galleryName || 'Gallery'} />}
-                {tileImage && renderWatermark(watermarkText)}
-
-                <div className="wall-tile-label">
-                  {galleryName || 'Gallery'}
-                </div>
-              </article>
-
-              <article className="empty-wall-tile" />
-              <article className="empty-wall-tile" />
-              <article className="empty-wall-tile" />
-              <article className="empty-wall-tile" />
-            </div>
-          </section>
-        )}
-
-        {view === 'event-wall' && (
-          <section className="collection-view">
-            <div className="collection-heading">
-              <div>
-                <p className="soft-label">
-                  {galleryName || 'Gallery'}
-                </p>
-
-                <h1>Events</h1>
-              </div>
-            </div>
-
-            <div className="wall-grid-five">
-              <article
-                className="wall-tile wall-tile-stacked"
-                role="button"
-                tabIndex="0"
-                onClick={() => setView('images')}
-              >
-                <div className="wall-tile-media">
-                  {tileImage && <img src={tileImage} alt={eventName || 'Event'} />}
-                  {tileImage && renderWatermark(watermarkText)}
-                </div>
-
-                <div className="wall-tile-name-below">
-                  {eventName || 'Event'}
-                </div>
-              </article>
-
-              <article className="empty-wall-tile" />
-              <article className="empty-wall-tile" />
-              <article className="empty-wall-tile" />
-              <article className="empty-wall-tile" />
-            </div>
-
-            <button className="back-button" type="button" onClick={() => setView('gallery-wall')}>
-              Back to galleries
-            </button>
-          </section>
-        )}
-
-        {view === 'images' && (
-          <section className="collection-view">
-            <div className="collection-heading">
-              <div>
-                <p className="soft-label">
-                  {galleryName || 'Gallery'} / {eventName || 'Event'}
-                </p>
-
-                <h1>Images</h1>
-              </div>
-
-              <div className="price-mark">
-                NZ${singleImagePrice || '0'}
-              </div>
+          <section className="studio-preview">
+            <div className="empty-photo-space">
+              <strong>{uploadStatus}</strong>
+              <br />
+              <span>{loadStatus}</span>
             </div>
 
             {photos.length === 0 && (
               <div className="empty-photo-space">
-                No images have been added yet.
+                Uploaded images will appear here.
               </div>
             )}
 
             {photos.length > 0 && (
-              <div className="customer-grid">
+              <div className="image-mosaic">
                 {photos.map((photo) => (
-                  <article className="customer-photo" key={photo.id}>
+                  <article className="mosaic-card" key={photo.id}>
                     <button type="button" onClick={() => setSelectedPhoto(photo)}>
                       <img src={photo.previewUrl} alt={photo.name} />
                       {renderWatermark(watermarkText)}
@@ -479,20 +273,24 @@ function App() {
 
                     <div className="buy-row">
                       <span>{photo.name}</span>
-                      <button type="button" onClick={() => handlePurchaseStart(photo)}>
-                        Buy NZ${singleImagePrice || '0'}
-                      </button>
+                    </div>
+
+                    <div className="empty-photo-space">
+                      <strong>Image key</strong>
+                      <br />
+                      <span>{photo.displayKey || 'Image key not available'}</span>
+                      <br />
+                      <br />
+                      <strong>Uploaded</strong>
+                      <br />
+                      <span>{formatUploadedTime(photo.uploadedTime)}</span>
                     </div>
                   </article>
                 ))}
               </div>
             )}
-
-            <button className="back-button" type="button" onClick={() => setView('event-wall')}>
-              Back to events
-            </button>
           </section>
-        )}
+        </section>
 
         {selectedPhoto && (
           <section className="lightbox" aria-label="Selected photo">
@@ -514,11 +312,15 @@ function App() {
 
               <div className="lightbox-bottom">
                 <p>
-                  Buy this image for NZ${singleImagePrice || '0'}
+                  {selectedPhoto.displayKey || 'Image key not available'}
+                </p>
+
+                <p>
+                  {formatUploadedTime(selectedPhoto.uploadedTime)}
                 </p>
 
                 <button type="button" onClick={handlePurchasePlaceholder}>
-                  Confirm purchase
+                  Purchase later
                 </button>
               </div>
             </div>
@@ -530,4 +332,3 @@ function App() {
 }
 
 export default App
-
