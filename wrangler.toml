@@ -5,3 +5,7 @@ compatibility_date = "2026-05-03"
 binding = "DB"
 database_name = "fotodrop-local"
 database_id = "local"
+
+[[r2_buckets]]
+binding = "DISPLAY_BUCKET"
+bucket_name = "fotodrop-display-local"
