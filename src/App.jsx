@@ -27,28 +27,28 @@ function App() {
   }
 
   async function handleD1ImageProof() {
-    setD1ProofStatus('Checking D1 image proof...')
+    setD1ProofStatus('Checking D1 images read...')
     setD1ProofImage(null)
 
     try {
-      const response = await fetch('/api/images-proof')
+      const response = await fetch('/api/images')
       const result = await response.json()
 
-      if (!response.ok || !result.ok || !result.image) {
-        setD1ProofStatus(result.error || 'D1 image proof failed')
+      if (!response.ok || !result.ok || !result.images || result.images.length === 0) {
+        setD1ProofStatus(result.error || 'D1 images read failed')
         return
       }
 
-      const image = result.image
+      const image = result.images[0]
 
       setD1ProofImage(image)
       setGalleryName(image.collection_name || 'Brackenfield')
       setEventName(image.event_name || 'Champagne Breakfast')
       setSingleImagePrice(String((image.price_cents || 0) / 100))
       setWatermarkText(image.watermark_text || 'FotoDeck')
-      setD1ProofStatus('D1 image proof passed')
+      setD1ProofStatus('D1 images read passed')
     } catch (error) {
-      setD1ProofStatus(error.message || 'D1 image proof failed')
+      setD1ProofStatus(error.message || 'D1 images read failed')
     }
   }
 
@@ -225,7 +225,7 @@ function App() {
                 />
 
                 <button className="photo-loader-button" type="button" onClick={handleD1ImageProof}>
-                  Read D1 image proof
+                  Read D1 images read
                 </button>
               </div>
             </section>
