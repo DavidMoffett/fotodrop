@@ -56,6 +56,8 @@ function App() {
   const [selectedPhoto, setSelectedPhoto] = useState(null)
   const [loadStatus, setLoadStatus] = useState('No photos loaded yet')
   const [uploadStatus, setUploadStatus] = useState('No upload yet')
+  const [uploadProgress, setUploadProgress] = useState(null)
+  const [isUploading, setIsUploading] = useState(false)
 
   function mapSavedPhotoToPhoto(photo) {
     return {
@@ -78,13 +80,28 @@ function App() {
       return
     }
 
-    setUploadStatus(`Uploading ${files.length} photo${files.length === 1 ? '' : 's'}...`)
+    setIsUploading(true)
+    setUploadProgress({
+      total: files.length,
+      completed: 0,
+      currentFile: files[0]?.name || '',
+    })
+    setUploadStatus(`Uploading 0 of ${files.length} photo${files.length === 1 ? '' : 's'}...`)
 
     const collectionId = makeSafeId(collectionName, 'fotodeck')
     const eventId = makeSafeId(eventName, 'event')
     const uploadedPhotos = []
 
-    for (const file of files) {
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files[index]
+
+      setUploadProgress({
+        total: files.length,
+        completed: index,
+        currentFile: file.name || `Photo ${index + 1}`,
+      })
+      setUploadStatus(`Uploading ${index + 1} of ${files.length}: ${file.name || `Photo ${index + 1}`}`)
+
       const formData = new FormData()
 
       formData.append('file', file)
@@ -103,16 +120,35 @@ function App() {
       const result = await response.json()
 
       if (!response.ok || !result.ok || !result.image) {
-        setUploadStatus(result.error || 'Upload failed')
+        setIsUploading(false)
+        setUploadProgress({
+          total: files.length,
+          completed: uploadedPhotos.length,
+          currentFile: file.name || `Photo ${index + 1}`,
+        })
+        setUploadStatus(result.error || `Upload failed on ${file.name || `photo ${index + 1}`}`)
         event.target.value = ''
         return
       }
 
       uploadedPhotos.push(mapSavedPhotoToPhoto(result.image))
+
+      setUploadProgress({
+        total: files.length,
+        completed: index + 1,
+        currentFile: file.name || `Photo ${index + 1}`,
+      })
+      setUploadStatus(`Uploaded ${index + 1} of ${files.length}`)
     }
 
     setPhotos((currentPhotos) => [...uploadedPhotos, ...currentPhotos])
-    setUploadStatus(`Uploaded ${uploadedPhotos.length} photo${uploadedPhotos.length === 1 ? '' : 's'} to R2 and D1`)
+    setIsUploading(false)
+    setUploadProgress({
+      total: files.length,
+      completed: uploadedPhotos.length,
+      currentFile: '',
+    })
+    setUploadStatus(`Uploaded ${uploadedPhotos.length} photo${uploadedPhotos.length === 1 ? '' : 's'}`)
     setLoadStatus(`${uploadedPhotos.length} new photo${uploadedPhotos.length === 1 ? '' : 's'} added`)
     event.target.value = ''
   }
@@ -153,6 +189,16 @@ function App() {
   }
 
   function handleReset() {
+    const message = isUploading
+      ? 'Uploads may still be running in the background. Reset only clears the screen. Continue?'
+      : 'Reset the visible screen? Uploaded photos already saved to FOTODECK will not be deleted.'
+
+    const confirmed = window.confirm(message)
+
+    if (!confirmed) {
+      return
+    }
+
     setView('studio')
     setCollectionName('FOTODECK')
     setEventName('Event')
@@ -163,6 +209,7 @@ function App() {
     setSelectedPhoto(null)
     setLoadStatus('No photos loaded yet')
     setUploadStatus('No upload yet')
+    setUploadProgress(null)
   }
 
   function handleAdminReturn() {
@@ -273,6 +320,7 @@ function App() {
                     value={collectionName}
                     placeholder="FOTODECK"
                     onChange={(event) => setCollectionName(event.target.value)}
+                    disabled={isUploading}
                   />
                 </label>
 
@@ -283,6 +331,7 @@ function App() {
                     value={eventName}
                     placeholder="Event"
                     onChange={(event) => setEventName(event.target.value)}
+                    disabled={isUploading}
                   />
                 </label>
 
@@ -293,6 +342,7 @@ function App() {
                     min="0"
                     value={singlePhotoPrice}
                     onChange={(event) => setSinglePhotoPrice(event.target.value)}
+                    disabled={isUploading}
                   />
                 </label>
 
@@ -303,13 +353,14 @@ function App() {
                     value={watermarkText}
                     placeholder="FOTODECK"
                     onChange={(event) => setWatermarkText(event.target.value)}
+                    disabled={isUploading}
                   />
                 </label>
               </div>
 
               <div className="photo-loader">
                 <label className="photo-loader-button" htmlFor="photo-upload">
-                  Add photos
+                  {isUploading ? 'Uploading...' : 'Add photos'}
                 </label>
 
                 <input
@@ -318,9 +369,10 @@ function App() {
                   accept="image/*"
                   multiple
                   onChange={handlePhotoSelection}
+                  disabled={isUploading}
                 />
 
-                <button className="photo-loader-button" type="button" onClick={handleLoadSavedPhotos}>
+                <button className="photo-loader-button" type="button" onClick={handleLoadSavedPhotos} disabled={isUploading}>
                   Load saved photos
                 </button>
               </div>
@@ -332,7 +384,7 @@ function App() {
                   className="dark-action"
                   type="button"
                   onClick={() => setView('entry')}
-                  disabled={photos.length === 0}
+                  disabled={photos.length === 0 || isUploading}
                 >
                   Open customer view
                 </button>
@@ -340,6 +392,20 @@ function App() {
 
               <div className="empty-photo-space">
                 <strong>{uploadStatus}</strong>
+                {uploadProgress && (
+                  <>
+                    <br />
+                    <span>
+                      {uploadProgress.completed} of {uploadProgress.total} complete
+                    </span>
+                    {uploadProgress.currentFile && (
+                      <>
+                        <br />
+                        <span>{uploadProgress.currentFile}</span>
+                      </>
+                    )}
+                  </>
+                )}
                 <br />
                 <span>{loadStatus}</span>
               </div>
