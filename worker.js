@@ -91,6 +91,114 @@ async function handleImages(request, env) {
   }
 }
 
+async function handleCollectionsEvents(request, env) {
+  if (request.method !== "GET") {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "D1 collections and events read",
+        error: "Use GET"
+      },
+      405
+    );
+  }
+
+  if (!env.DB) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "D1 collections and events read",
+        error: "D1 binding DB is missing"
+      },
+      500
+    );
+  }
+
+  try {
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS collections (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    `).run();
+
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS events (
+        id TEXT PRIMARY KEY,
+        collection_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    `).run();
+
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS images (
+        id TEXT PRIMARY KEY,
+        collection_id TEXT NOT NULL,
+        event_id TEXT NOT NULL,
+        file_name TEXT NOT NULL,
+        display_key TEXT NOT NULL,
+        watermark_text TEXT,
+        price_cents INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    `).run();
+
+    const collectionsResult = await env.DB.prepare(`
+      SELECT
+        collections.id,
+        collections.name,
+        collections.created_at,
+        COUNT(images.id) AS photo_count
+      FROM collections
+      LEFT JOIN images ON collections.id = images.collection_id
+      GROUP BY collections.id, collections.name, collections.created_at
+      ORDER BY collections.created_at DESC
+    `).all();
+
+    const eventsResult = await env.DB.prepare(`
+      SELECT
+        events.id,
+        events.collection_id,
+        events.name,
+        events.created_at,
+        COUNT(images.id) AS photo_count
+      FROM events
+      LEFT JOIN images ON events.id = images.event_id
+      GROUP BY events.id, events.collection_id, events.name, events.created_at
+      ORDER BY events.created_at DESC
+    `).all();
+
+    const collections = collectionsResult.results || [];
+    const events = eventsResult.results || [];
+
+    return jsonResponse({
+      ok: true,
+      app: "FOTODECK",
+      service: "D1 collections and events read",
+      collections,
+      events,
+      collectionCount: collections.length,
+      eventCount: events.length,
+      checkedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "D1 collections and events read",
+        error: error.message,
+        checkedAt: new Date().toISOString()
+      },
+      500
+    );
+  }
+}
+
 async function handleDisplayImage(request, env) {
   if (request.method !== "GET") {
     return jsonResponse(
@@ -361,6 +469,10 @@ export default {
 
     if (url.pathname === "/api/images") {
       return handleImages(request, env);
+    }
+
+    if (url.pathname === "/api/collections-events") {
+      return handleCollectionsEvents(request, env);
     }
 
     if (url.pathname === "/api/display-image") {
