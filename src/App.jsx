@@ -62,6 +62,8 @@ function App() {
   const [savedCollections, setSavedCollections] = useState([])
   const [savedEvents, setSavedEvents] = useState([])
   const [savedStatus, setSavedStatus] = useState('Saved collections not loaded yet')
+  const [deleteStatus, setDeleteStatus] = useState('No delete action yet')
+  const [deletingPhotoId, setDeletingPhotoId] = useState('')
 
   function mapSavedPhotoToPhoto(photo) {
     return {
@@ -223,6 +225,51 @@ function App() {
     await handleLoadSavedPhotos(collection.id, event.id)
   }
 
+  async function handleDeletePhoto(photo) {
+    const confirmed = window.confirm(
+      `Delete this photo from FOTODECK?\n\n${photo.name}\n\nThis removes the saved record and display file.`
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    setDeletingPhotoId(photo.id)
+    setDeleteStatus(`Deleting ${photo.name}...`)
+
+    try {
+      const response = await fetch('/api/delete-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          imageId: photo.id,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok || !result.ok) {
+        setDeleteStatus(result.error || `Could not delete ${photo.name}`)
+        setDeletingPhotoId('')
+        return
+      }
+
+      setPhotos((currentPhotos) => currentPhotos.filter((item) => item.id !== photo.id))
+
+      if (selectedPhoto && selectedPhoto.id === photo.id) {
+        setSelectedPhoto(null)
+      }
+
+      setDeleteStatus(`Deleted ${photo.name}`)
+      setDeletingPhotoId('')
+    } catch (error) {
+      setDeleteStatus(error.message || `Could not delete ${photo.name}`)
+      setDeletingPhotoId('')
+    }
+  }
+
   function handleReset() {
     const message = isUploading
       ? 'Uploads may still be running in the background. Reset only clears the screen. Continue?'
@@ -246,6 +293,8 @@ function App() {
     setLoadStatus('No photos loaded yet')
     setUploadStatus('No upload yet')
     setUploadProgress(null)
+    setDeleteStatus('No delete action yet')
+    setDeletingPhotoId('')
   }
 
   function handleAdminReturn() {
@@ -522,6 +571,8 @@ function App() {
                 )}
                 <br />
                 <span>{loadStatus}</span>
+                <br />
+                <span>{deleteStatus}</span>
               </div>
 
               {photos.length === 0 && (
@@ -541,6 +592,13 @@ function App() {
 
                       <div className="buy-row">
                         <span>{photo.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePhoto(photo)}
+                          disabled={deletingPhotoId === photo.id || isUploading}
+                        >
+                          {deletingPhotoId === photo.id ? 'Deleting...' : 'Delete'}
+                        </button>
                       </div>
                     </article>
                   ))}
