@@ -2,7 +2,7 @@
 
 :root {
   color: #222222;
-  background: #e8e8e8;
+  background: #dedede;
   font-family: "Manrope", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -14,7 +14,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background: #e8e8e8;
+  background: #dedede;
   font-family: "Manrope", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -35,14 +35,14 @@ button:disabled {
 .deck-page {
   min-height: 100vh;
   padding: 28px;
-  background: #e8e8e8;
+  background: #dedede;
 }
 
 .deck-shell {
   width: min(100%, 1240px);
   min-height: calc(100vh - 56px);
   margin: 0 auto;
-  background: #e8e8e8;
+  background: #dedede;
 }
 
 .deck-header {
@@ -75,7 +75,7 @@ button:disabled {
   border: 0;
   border-radius: 999px;
   padding: 9px 13px;
-  background: #d9d9d9;
+  background: #cecece;
   color: #333333;
   font-size: 0.86rem;
   font-weight: 750;
@@ -149,7 +149,7 @@ h2 {
   gap: 16px;
   padding: 18px;
   border-radius: 30px;
-  background: #dddddd;
+  background: #d2d2d2;
 }
 
 .studio-fields {
@@ -173,7 +173,7 @@ h2 {
   padding: 13px 14px;
   border: 0;
   border-radius: 16px;
-  background: #f2f2f2;
+  background: #e8e8e8;
   color: #222222;
   outline: none;
 }
@@ -188,7 +188,7 @@ h2 {
   display: grid;
   place-items: center;
   border-radius: 24px;
-  background: #cfcfcf;
+  background: #c4c4c4;
 }
 
 .photo-loader-button {
@@ -198,7 +198,7 @@ h2 {
   min-height: 50px;
   border-radius: 999px;
   background: #2b2b2b;
-  color: #f2f2f2;
+  color: #e8e8e8;
   font-family: "Manrope", ui-sans-serif, system-ui, sans-serif;
   font-size: 0.95rem;
   font-weight: 850;
@@ -219,7 +219,7 @@ h2 {
 .collection-view {
   padding: 22px;
   border-radius: 34px;
-  background: #dddddd;
+  background: #d2d2d2;
 }
 
 .preview-heading,
@@ -240,7 +240,7 @@ h2 {
   border-radius: 999px;
   padding: 13px 18px;
   background: #2b2b2b;
-  color: #f2f2f2;
+  color: #e8e8e8;
   font-size: 0.92rem;
   font-weight: 850;
 }
@@ -250,7 +250,7 @@ h2 {
   place-items: center;
   min-height: 180px;
   border-radius: 24px;
-  background: #cfcfcf;
+  background: #c4c4c4;
   color: #666666;
   font-weight: 750;
 }
@@ -267,7 +267,7 @@ h2 {
   position: relative;
   overflow: hidden;
   border-radius: 22px;
-  background: #cfcfcf;
+  background: #c4c4c4;
 }
 
 .mosaic-card img,
@@ -301,7 +301,7 @@ h2 {
 .price-mark {
   border-radius: 999px;
   padding: 10px 14px;
-  background: #cfcfcf;
+  background: #c4c4c4;
   color: #333333;
   font-weight: 850;
   white-space: nowrap;
@@ -319,7 +319,7 @@ h2 {
   min-height: 180px;
   overflow: hidden;
   border-radius: 24px;
-  background: #cfcfcf;
+  background: #c4c4c4;
 }
 
 .wall-tile {
@@ -343,7 +343,7 @@ h2 {
   overflow: hidden;
   border-radius: 999px;
   padding: 8px 10px;
-  background: rgba(242, 242, 242, 0.78);
+  background: rgba(232, 232, 232, 0.78);
   color: #222222;
   font-size: 0.78rem;
   font-weight: 850;
@@ -362,7 +362,7 @@ h2 {
   position: relative;
   overflow: hidden;
   border-radius: 24px 24px 0 0;
-  background: #cfcfcf;
+  background: #c4c4c4;
 }
 
 .wall-tile-media img {
@@ -374,7 +374,7 @@ h2 {
 
 .wall-tile-name-below {
   padding: 10px 12px 12px;
-  background: #d9d9d9;
+  background: #cecece;
   color: #222222;
   font-size: 0.78rem;
   font-weight: 850;
@@ -399,7 +399,7 @@ h2 {
   gap: 10px;
   align-items: center;
   padding: 10px;
-  background: #d9d9d9;
+  background: #cecece;
 }
 
 .buy-row > span {
@@ -415,7 +415,7 @@ h2 {
   border: 0;
   border-radius: 999px;
   padding: 8px 10px;
-  background: #cfcfcf;
+  background: #c4c4c4;
   color: #222222;
   font-size: 0.76rem;
   font-weight: 850;
@@ -426,7 +426,7 @@ h2 {
   border: 0;
   border-radius: 999px;
   padding: 10px 14px;
-  background: #cfcfcf;
+  background: #c4c4c4;
   color: #222222;
   font-size: 0.82rem;
   font-weight: 850;
@@ -470,7 +470,7 @@ h2 {
   display: grid;
   place-items: center;
   padding: 28px;
-  background: rgba(232, 232, 232, 0.88);
+  background: rgba(222, 222, 222, 0.92);
   backdrop-filter: blur(14px);
 }
 
@@ -481,7 +481,7 @@ h2 {
   gap: 14px;
   padding: 18px;
   border-radius: 34px;
-  background: #dddddd;
+  background: #d2d2d2;
 }
 
 .lightbox-top {
@@ -501,7 +501,7 @@ h2 {
   place-items: center;
   min-height: min(68vh, 720px);
   border-radius: 28px;
-  background: #cfcfcf;
+  background: #c4c4c4;
   overflow: hidden;
 }
 
