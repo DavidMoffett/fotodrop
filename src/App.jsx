@@ -11,7 +11,7 @@ function makeSafeId(value, fallback) {
   return safe || fallback
 }
 
-function makeDisplayImageUrl(displayKey) {
+function makeDisplayPhotoUrl(displayKey) {
   if (!displayKey) {
     return ''
   }
@@ -21,7 +21,7 @@ function makeDisplayImageUrl(displayKey) {
 
 function formatUploadedTime(value) {
   if (!value) {
-    return 'Uploaded time not available'
+    return 'Upload time not available'
   }
 
   const date = new Date(value)
@@ -33,14 +33,14 @@ function formatUploadedTime(value) {
   return date.toLocaleString()
 }
 
-function getUploadedTime(image) {
+function getUploadedTime(photo) {
   return (
-    image.uploaded_at ||
-    image.created_at ||
-    image.inserted_at ||
-    image.saved_at ||
-    image.createdAt ||
-    image.uploadedAt ||
+    photo.uploaded_at ||
+    photo.created_at ||
+    photo.inserted_at ||
+    photo.saved_at ||
+    photo.createdAt ||
+    photo.uploadedAt ||
     ''
   )
 }
@@ -48,26 +48,26 @@ function getUploadedTime(image) {
 function App() {
   const [view, setView] = useState('studio')
   const [collectionName, setCollectionName] = useState('PhotoDeck')
-  const [eventName, setEventName] = useState('Uploaded Images')
-  const [singleImagePrice, setSingleImagePrice] = useState('7')
+  const [eventName, setEventName] = useState('Event')
+  const [singlePhotoPrice, setSinglePhotoPrice] = useState('7')
   const [watermarkText, setWatermarkText] = useState('PhotoDeck')
   const [photos, setPhotos] = useState([])
   const [customer, setCustomer] = useState(null)
   const [selectedPhoto, setSelectedPhoto] = useState(null)
-  const [loadStatus, setLoadStatus] = useState('No images loaded yet')
+  const [loadStatus, setLoadStatus] = useState('No photos loaded yet')
   const [uploadStatus, setUploadStatus] = useState('No upload yet')
 
-  function mapSavedImageToPhoto(image) {
+  function mapSavedPhotoToPhoto(photo) {
     return {
-      id: image.id || image.display_key || image.file_name,
-      name: image.file_name || image.name || 'Unnamed image',
-      previewUrl: makeDisplayImageUrl(image.display_key),
-      displayKey: image.display_key || '',
-      eventName: image.event_name || '',
-      collectionName: image.collection_name || '',
-      priceCents: image.price_cents || 0,
-      uploadedTime: getUploadedTime(image),
-      watermarkText: image.watermark_text || '',
+      id: photo.id || photo.display_key || photo.file_name,
+      name: photo.file_name || photo.name || 'Unnamed photo',
+      previewUrl: makeDisplayPhotoUrl(photo.display_key),
+      displayKey: photo.display_key || '',
+      eventName: photo.event_name || '',
+      collectionName: photo.collection_name || '',
+      priceCents: photo.price_cents || 0,
+      uploadedTime: getUploadedTime(photo),
+      watermarkText: photo.watermark_text || '',
     }
   }
 
@@ -78,10 +78,10 @@ function App() {
       return
     }
 
-    setUploadStatus(`Uploading ${files.length} image${files.length === 1 ? '' : 's'}...`)
+    setUploadStatus(`Uploading ${files.length} photo${files.length === 1 ? '' : 's'}...`)
 
     const collectionId = makeSafeId(collectionName, 'photodeck')
-    const eventId = makeSafeId(eventName, 'uploaded-images')
+    const eventId = makeSafeId(eventName, 'event')
     const uploadedPhotos = []
 
     for (const file of files) {
@@ -91,9 +91,9 @@ function App() {
       formData.append('collectionId', collectionId)
       formData.append('collectionName', collectionName || 'PhotoDeck')
       formData.append('eventId', eventId)
-      formData.append('eventName', eventName || 'Uploaded Images')
+      formData.append('eventName', eventName || 'Event')
       formData.append('watermarkText', watermarkText || 'PhotoDeck')
-      formData.append('price', singleImagePrice || '0')
+      formData.append('price', singlePhotoPrice || '0')
 
       const response = await fetch('/api/upload-display', {
         method: 'POST',
@@ -108,33 +108,33 @@ function App() {
         return
       }
 
-      uploadedPhotos.push(mapSavedImageToPhoto(result.image))
+      uploadedPhotos.push(mapSavedPhotoToPhoto(result.image))
     }
 
     setPhotos((currentPhotos) => [...uploadedPhotos, ...currentPhotos])
-    setUploadStatus(`Uploaded ${uploadedPhotos.length} image${uploadedPhotos.length === 1 ? '' : 's'} to R2 and D1`)
-    setLoadStatus(`${uploadedPhotos.length} new image${uploadedPhotos.length === 1 ? '' : 's'} added`)
+    setUploadStatus(`Uploaded ${uploadedPhotos.length} photo${uploadedPhotos.length === 1 ? '' : 's'} to R2 and D1`)
+    setLoadStatus(`${uploadedPhotos.length} new photo${uploadedPhotos.length === 1 ? '' : 's'} added`)
     event.target.value = ''
   }
 
-  async function handleLoadSavedImages() {
-    setLoadStatus('Loading saved images...')
+  async function handleLoadSavedPhotos() {
+    setLoadStatus('Loading saved photos...')
 
     try {
       const response = await fetch('/api/images')
       const result = await response.json()
 
       if (!response.ok || !result.ok || !result.images || result.images.length === 0) {
-        setLoadStatus(result.error || 'No saved images found')
+        setLoadStatus(result.error || 'No saved photos found')
         return
       }
 
-      const savedPhotos = result.images.map(mapSavedImageToPhoto)
+      const savedPhotos = result.images.map(mapSavedPhotoToPhoto)
 
       setPhotos(savedPhotos)
-      setLoadStatus(`Loaded ${savedPhotos.length} saved image${savedPhotos.length === 1 ? '' : 's'}`)
+      setLoadStatus(`Loaded ${savedPhotos.length} saved photo${savedPhotos.length === 1 ? '' : 's'}`)
     } catch (error) {
-      setLoadStatus(error.message || 'Saved images could not be loaded')
+      setLoadStatus(error.message || 'Saved photos could not be loaded')
     }
   }
 
@@ -149,19 +149,19 @@ function App() {
       email: formData.get('customerEmail'),
     })
 
-    setView('gallery-wall')
+    setView('collection-wall')
   }
 
   function handleReset() {
     setView('studio')
     setCollectionName('PhotoDeck')
-    setEventName('Uploaded Images')
-    setSingleImagePrice('7')
+    setEventName('Event')
+    setSinglePhotoPrice('7')
     setWatermarkText('PhotoDeck')
     setPhotos([])
     setCustomer(null)
     setSelectedPhoto(null)
-    setLoadStatus('No images loaded yet')
+    setLoadStatus('No photos loaded yet')
     setUploadStatus('No upload yet')
   }
 
@@ -195,8 +195,13 @@ function App() {
     )
   }
 
-  const tileImage = photos[0]?.previewUrl || null
+  const tilePhoto = photos[0]?.previewUrl || null
   const isStudioView = view === 'studio'
+  const smallHeadingStyle = {
+    fontSize: '0.8rem',
+    lineHeight: '1.1',
+    letterSpacing: '0.02em',
+  }
 
   return (
     <main className="deck-page">
@@ -223,8 +228,8 @@ function App() {
               <button type="button" onClick={() => setView('entry')}>
                 Customer view
               </button>
-              <button type="button" onClick={handleLoadSavedImages}>
-                Load saved images
+              <button type="button" onClick={handleLoadSavedPhotos}>
+                Load saved photos
               </button>
               <button type="button" onClick={handleReset}>
                 Reset
@@ -254,7 +259,7 @@ function App() {
         {view === 'studio' && (
           <section className="studio-view">
             <div className="studio-title-row">
-              <h1 className="collections-title" style={{ fontSize: '1rem' }}>
+              <h1 className="collections-title" style={smallHeadingStyle}>
                 Collections
               </h1>
             </div>
@@ -276,18 +281,18 @@ function App() {
                   <input
                     type="text"
                     value={eventName}
-                    placeholder="Uploaded Images"
+                    placeholder="Event"
                     onChange={(event) => setEventName(event.target.value)}
                   />
                 </label>
 
                 <label>
-                  Image price
+                  Photo price
                   <input
                     type="number"
                     min="0"
-                    value={singleImagePrice}
-                    onChange={(event) => setSingleImagePrice(event.target.value)}
+                    value={singlePhotoPrice}
+                    onChange={(event) => setSinglePhotoPrice(event.target.value)}
                   />
                 </label>
 
@@ -304,7 +309,7 @@ function App() {
 
               <div className="photo-loader">
                 <label className="photo-loader-button" htmlFor="photo-upload">
-                  Add images
+                  Add photos
                 </label>
 
                 <input
@@ -315,8 +320,8 @@ function App() {
                   onChange={handlePhotoSelection}
                 />
 
-                <button className="photo-loader-button" type="button" onClick={handleLoadSavedImages}>
-                  Load saved images
+                <button className="photo-loader-button" type="button" onClick={handleLoadSavedPhotos}>
+                  Load saved photos
                 </button>
               </div>
             </section>
@@ -359,9 +364,9 @@ function App() {
                       </div>
 
                       <div className="empty-photo-space">
-                        <strong>Image key</strong>
+                        <strong>File key</strong>
                         <br />
-                        <span>{photo.displayKey || 'Image key not available'}</span>
+                        <span>{photo.displayKey || 'File key not available'}</span>
                         <br />
                         <br />
                         <strong>Uploaded</strong>
@@ -413,7 +418,7 @@ function App() {
           </section>
         )}
 
-        {view === 'gallery-wall' && (
+        {view === 'collection-wall' && (
           <section className="collection-view">
             <div className="collection-heading">
               <div>
@@ -421,7 +426,7 @@ function App() {
                   PhotoDeck
                 </p>
 
-                <h1 style={{ fontSize: '1rem' }}>Collections</h1>
+                <h1 style={smallHeadingStyle}>Collections</h1>
 
                 {customer && (
                   <p className="customer-line">
@@ -433,8 +438,8 @@ function App() {
 
             <div className="wall-grid-five">
               <article className="wall-tile" role="button" tabIndex="0" onClick={() => setView('event-wall')}>
-                {tileImage && <img src={tileImage} alt={collectionName || 'Collection'} />}
-                {tileImage && renderWatermark(watermarkText)}
+                {tilePhoto && <img src={tilePhoto} alt={collectionName || 'Collection'} />}
+                {tilePhoto && renderWatermark(watermarkText)}
 
                 <div className="wall-tile-label">
                   {collectionName || 'Collection'}
@@ -457,7 +462,7 @@ function App() {
                   {collectionName || 'Collection'}
                 </p>
 
-                <h1 style={{ fontSize: '1rem' }}>Events</h1>
+                <h1 style={smallHeadingStyle}>Events</h1>
               </div>
             </div>
 
@@ -466,11 +471,11 @@ function App() {
                 className="wall-tile wall-tile-stacked"
                 role="button"
                 tabIndex="0"
-                onClick={() => setView('photos')}
+                onClick={() => setView('photo-grid')}
               >
                 <div className="wall-tile-media">
-                  {tileImage && <img src={tileImage} alt={eventName || 'Event'} />}
-                  {tileImage && renderWatermark(watermarkText)}
+                  {tilePhoto && <img src={tilePhoto} alt={eventName || 'Event'} />}
+                  {tilePhoto && renderWatermark(watermarkText)}
                 </div>
 
                 <div className="wall-tile-name-below">
@@ -484,13 +489,13 @@ function App() {
               <article className="empty-wall-tile" />
             </div>
 
-            <button className="back-button" type="button" onClick={() => setView('gallery-wall')}>
+            <button className="back-button" type="button" onClick={() => setView('collection-wall')}>
               Back to collections
             </button>
           </section>
         )}
 
-        {view === 'photos' && (
+        {view === 'photo-grid' && (
           <section className="collection-view">
             <div className="collection-heading">
               <div>
@@ -500,7 +505,7 @@ function App() {
               </div>
 
               <div className="price-mark">
-                NZ${singleImagePrice || '0'}
+                NZ${singlePhotoPrice || '0'}
               </div>
             </div>
 
@@ -522,7 +527,7 @@ function App() {
                     <div className="buy-row">
                       <span>{photo.name}</span>
                       <button type="button" onClick={() => handlePurchaseStart(photo)}>
-                        Buy NZ${singleImagePrice || '0'}
+                        Buy NZ${singlePhotoPrice || '0'}
                       </button>
                     </div>
                   </article>
@@ -556,7 +561,7 @@ function App() {
 
               <div className="lightbox-bottom">
                 <p>
-                  Buy this photo for NZ${singleImagePrice || '0'}
+                  Buy this photo for NZ${singlePhotoPrice || '0'}
                 </p>
 
                 <button type="button" onClick={handlePurchasePlaceholder}>
