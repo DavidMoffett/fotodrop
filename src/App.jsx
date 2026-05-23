@@ -52,7 +52,6 @@ function App() {
   const [singlePhotoPrice, setSinglePhotoPrice] = useState('7')
   const [watermarkText, setWatermarkText] = useState('FOTODECK')
   const [photos, setPhotos] = useState([])
-  const [customer, setCustomer] = useState(null)
   const [selectedPhoto, setSelectedPhoto] = useState(null)
   const [loadStatus, setLoadStatus] = useState('No photos loaded yet')
   const [uploadStatus, setUploadStatus] = useState('No upload yet')
@@ -174,20 +173,6 @@ function App() {
     }
   }
 
-  function handleCustomerEntry(event) {
-    event.preventDefault()
-
-    const formData = new FormData(event.currentTarget)
-
-    setCustomer({
-      name: formData.get('customerName'),
-      phone: formData.get('customerPhone'),
-      email: formData.get('customerEmail'),
-    })
-
-    setView('collection-wall')
-  }
-
   function handleReset() {
     const message = isUploading
       ? 'Uploads may still be running in the background. Reset only clears the screen. Continue?'
@@ -205,7 +190,6 @@ function App() {
     setSinglePhotoPrice('7')
     setWatermarkText('FOTODECK')
     setPhotos([])
-    setCustomer(null)
     setSelectedPhoto(null)
     setLoadStatus('No photos loaded yet')
     setUploadStatus('No upload yet')
@@ -272,7 +256,7 @@ function App() {
               <button type="button" onClick={() => setView('studio')}>
                 Studio
               </button>
-              <button type="button" onClick={() => setView('entry')}>
+              <button type="button" onClick={() => setView('collection-wall')}>
                 Customer view
               </button>
               <button type="button" onClick={handleLoadSavedPhotos}>
@@ -383,7 +367,7 @@ function App() {
                 <button
                   className="dark-action"
                   type="button"
-                  onClick={() => setView('entry')}
+                  onClick={() => setView('collection-wall')}
                   disabled={photos.length === 0 || isUploading}
                 >
                   Open customer view
@@ -436,43 +420,6 @@ function App() {
           </section>
         )}
 
-        {view === 'entry' && (
-          <section className="entry-view">
-            <div className="entry-card">
-              <p className="soft-label">
-                FOTODECK
-              </p>
-
-              <h1>{collectionName || 'Photo gallery'}</h1>
-
-              <p>
-                Enter your details to view the photo wall.
-              </p>
-
-              <form className="entry-form" onSubmit={handleCustomerEntry}>
-                <label>
-                  Name
-                  <input name="customerName" type="text" placeholder="Your name" required />
-                </label>
-
-                <label>
-                  Phone
-                  <input name="customerPhone" type="tel" placeholder="Your phone number" required />
-                </label>
-
-                <label>
-                  Email
-                  <input name="customerEmail" type="email" placeholder="you@example.com" required />
-                </label>
-
-                <button className="dark-action" type="submit">
-                  View photos
-                </button>
-              </form>
-            </div>
-          </section>
-        )}
-
         {view === 'collection-wall' && (
           <section className="collection-view">
             <div className="collection-heading">
@@ -482,12 +429,6 @@ function App() {
                 </p>
 
                 <h1 style={smallHeadingStyle}>Collections</h1>
-
-                {customer && (
-                  <p className="customer-line">
-                    Welcome, {customer.name}
-                  </p>
-                )}
               </div>
             </div>
 
