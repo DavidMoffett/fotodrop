@@ -64,6 +64,7 @@ function App() {
   const [savedStatus, setSavedStatus] = useState('Saved collections not loaded yet')
   const [deleteStatus, setDeleteStatus] = useState('No delete action yet')
   const [deletingPhotoId, setDeletingPhotoId] = useState('')
+  const [deletingEventId, setDeletingEventId] = useState('')
 
   function mapSavedPhotoToPhoto(photo) {
     return {
@@ -270,6 +271,83 @@ function App() {
     }
   }
 
+  async function handleDeleteEvent(collection, event) {
+    const firstConfirm = window.confirm(
+      `Delete this event from FOTODECK?\n\nCollection: ${collection.name || 'Collection'}\nEvent: ${event.name || 'Event'}\nPhotos: ${event.photo_count || 0}\n\nThis deletes the selected event/group and its photos. It does not delete the collection.`
+    )
+
+    if (!firstConfirm) {
+      return
+    }
+
+    const typedConfirm = window.prompt(
+      `Final confirmation for deleting event:\n\n${event.name || 'Event'}\n\nType DELETE EVENT to continue.`
+    )
+
+    if (typedConfirm !== 'DELETE EVENT') {
+      setDeleteStatus('Event delete cancelled')
+      return
+    }
+
+    setDeletingEventId(event.id)
+    setDeleteStatus(`Deleting event ${event.name || 'Event'}...`)
+
+    try {
+      const response = await fetch('/api/delete-event', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          collectionId: collection.id,
+          eventId: event.id,
+          confirmText: 'DELETE EVENT',
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok || !result.ok) {
+        setDeleteStatus(result.error || `Could not delete event ${event.name || 'Event'}`)
+        setDeletingEventId('')
+        return
+      }
+
+      setSavedEvents((currentEvents) => currentEvents.filter((item) => item.id !== event.id))
+
+      setSavedCollections((currentCollections) =>
+        currentCollections.map((item) => {
+          if (item.id !== collection.id) {
+            return item
+          }
+
+          const deletedPhotoCount = event.photo_count || 0
+          const currentPhotoCount = item.photo_count || 0
+
+          return {
+            ...item,
+            photo_count: Math.max(0, currentPhotoCount - deletedPhotoCount),
+          }
+        })
+      )
+
+      if (activeCollectionId === collection.id && activeEventId === event.id) {
+        setActiveEventId('')
+        setEventName('Event')
+        setPhotos([])
+        setSelectedPhoto(null)
+        setLoadStatus('Deleted event removed from current view')
+      }
+
+      setDeleteStatus(`Deleted event ${event.name || 'Event'}`)
+      setSavedStatus(`Deleted ${collection.name || 'Collection'} / ${event.name || 'Event'}`)
+      setDeletingEventId('')
+    } catch (error) {
+      setDeleteStatus(error.message || `Could not delete event ${event.name || 'Event'}`)
+      setDeletingEventId('')
+    }
+  }
+
   function handleReset() {
     const message = isUploading
       ? 'Uploads may still be running in the background. Reset only clears the screen. Continue?'
@@ -295,6 +373,7 @@ function App() {
     setUploadProgress(null)
     setDeleteStatus('No delete action yet')
     setDeletingPhotoId('')
+    setDeletingEventId('')
   }
 
   function handleAdminReturn() {
@@ -517,7 +596,7 @@ function App() {
                           <div className="image-mosaic">
                             {collectionEvents.map((event) => (
                               <article className="mosaic-card" key={event.id}>
-                                <button type="button" onClick={() => handleSelectSavedEvent(collection, event)} disabled={isUploading}>
+                                <button type="button" onClick={() => handleSelectSavedEvent(collection, event)} disabled={isUploading || deletingEventId === event.id}>
                                   <div className="empty-photo-space">
                                     <strong>{event.name}</strong>
                                     <br />
@@ -529,6 +608,13 @@ function App() {
 
                                 <div className="buy-row">
                                   <span>{event.id}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteEvent(collection, event)}
+                                    disabled={isUploading || deletingEventId === event.id}
+                                  >
+                                    {deletingEventId === event.id ? 'Deleting...' : 'Delete Event'}
+                                  </button>
                                 </div>
                               </article>
                             ))}
