@@ -47,10 +47,10 @@ function getUploadedTime(photo) {
 
 function App() {
   const [view, setView] = useState('studio')
-  const [collectionName, setCollectionName] = useState('PhotoDeck')
+  const [collectionName, setCollectionName] = useState('FOTODECK')
   const [eventName, setEventName] = useState('Event')
   const [singlePhotoPrice, setSinglePhotoPrice] = useState('7')
-  const [watermarkText, setWatermarkText] = useState('PhotoDeck')
+  const [watermarkText, setWatermarkText] = useState('FOTODECK')
   const [photos, setPhotos] = useState([])
   const [customer, setCustomer] = useState(null)
   const [selectedPhoto, setSelectedPhoto] = useState(null)
@@ -80,7 +80,7 @@ function App() {
 
     setUploadStatus(`Uploading ${files.length} photo${files.length === 1 ? '' : 's'}...`)
 
-    const collectionId = makeSafeId(collectionName, 'photodeck')
+    const collectionId = makeSafeId(collectionName, 'fotodeck')
     const eventId = makeSafeId(eventName, 'event')
     const uploadedPhotos = []
 
@@ -89,10 +89,10 @@ function App() {
 
       formData.append('file', file)
       formData.append('collectionId', collectionId)
-      formData.append('collectionName', collectionName || 'PhotoDeck')
+      formData.append('collectionName', collectionName || 'FOTODECK')
       formData.append('eventId', eventId)
       formData.append('eventName', eventName || 'Event')
-      formData.append('watermarkText', watermarkText || 'PhotoDeck')
+      formData.append('watermarkText', watermarkText || 'FOTODECK')
       formData.append('price', singlePhotoPrice || '0')
 
       const response = await fetch('/api/upload-display', {
@@ -154,10 +154,10 @@ function App() {
 
   function handleReset() {
     setView('studio')
-    setCollectionName('PhotoDeck')
+    setCollectionName('FOTODECK')
     setEventName('Event')
     setSinglePhotoPrice('7')
-    setWatermarkText('PhotoDeck')
+    setWatermarkText('FOTODECK')
     setPhotos([])
     setCustomer(null)
     setSelectedPhoto(null)
@@ -183,7 +183,7 @@ function App() {
   }
 
   function renderWatermark(text) {
-    const mark = text && String(text).trim() ? text.trim() : 'PhotoDeck'
+    const mark = text && String(text).trim() ? text.trim() : 'FOTODECK'
     const items = Array.from({ length: 12 }, (_, index) => `${mark}-${index}`)
 
     return (
@@ -215,9 +215,9 @@ function App() {
                 setView('studio')
               }
             }}
-            aria-label="PhotoDeck"
+            aria-label="FOTODECK"
           >
-            PhotoDeck
+            FOTODECK
           </button>
 
           {isStudioView && (
@@ -271,7 +271,7 @@ function App() {
                   <input
                     type="text"
                     value={collectionName}
-                    placeholder="PhotoDeck"
+                    placeholder="FOTODECK"
                     onChange={(event) => setCollectionName(event.target.value)}
                   />
                 </label>
@@ -297,11 +297,11 @@ function App() {
                 </label>
 
                 <label>
-                  Watermark
+                  Fotomark
                   <input
                     type="text"
                     value={watermarkText}
-                    placeholder="PhotoDeck"
+                    placeholder="FOTODECK"
                     onChange={(event) => setWatermarkText(event.target.value)}
                   />
                 </label>
@@ -362,17 +362,6 @@ function App() {
                       <div className="buy-row">
                         <span>{photo.name}</span>
                       </div>
-
-                      <div className="empty-photo-space">
-                        <strong>File key</strong>
-                        <br />
-                        <span>{photo.displayKey || 'File key not available'}</span>
-                        <br />
-                        <br />
-                        <strong>Uploaded</strong>
-                        <br />
-                        <span>{formatUploadedTime(photo.uploadedTime)}</span>
-                      </div>
                     </article>
                   ))}
                 </div>
@@ -385,7 +374,7 @@ function App() {
           <section className="entry-view">
             <div className="entry-card">
               <p className="soft-label">
-                PhotoDeck
+                FOTODECK
               </p>
 
               <h1>{collectionName || 'Photo gallery'}</h1>
@@ -423,7 +412,7 @@ function App() {
             <div className="collection-heading">
               <div>
                 <p className="soft-label">
-                  PhotoDeck
+                  FOTODECK
                 </p>
 
                 <h1 style={smallHeadingStyle}>Collections</h1>
