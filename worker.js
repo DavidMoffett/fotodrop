@@ -51,7 +51,11 @@ async function handleImages(request, env) {
   }
 
   try {
-    const result = await env.DB.prepare(`
+    const url = new URL(request.url);
+    const collectionId = url.searchParams.get("collectionId");
+    const eventId = url.searchParams.get("eventId");
+
+    let query = `
       SELECT
         images.id,
         images.file_name,
@@ -66,13 +70,38 @@ async function handleImages(request, env) {
       FROM images
       JOIN events ON images.event_id = events.id
       JOIN collections ON images.collection_id = collections.id
-      ORDER BY images.created_at DESC
-    `).all();
+    `;
+
+    const filters = [];
+    const values = [];
+
+    if (collectionId) {
+      filters.push("images.collection_id = ?");
+      values.push(collectionId);
+    }
+
+    if (eventId) {
+      filters.push("images.event_id = ?");
+      values.push(eventId);
+    }
+
+    if (filters.length > 0) {
+      query += ` WHERE ${filters.join(" AND ")}`;
+    }
+
+    query += ` ORDER BY images.created_at DESC`;
+
+    const prepared = env.DB.prepare(query);
+    const result = values.length > 0
+      ? await prepared.bind(...values).all()
+      : await prepared.all();
 
     return jsonResponse({
       ok: true,
       app: "FOTODECK",
       service: "D1 images read",
+      collectionId: collectionId || null,
+      eventId: eventId || null,
       images: result.results || [],
       count: result.results ? result.results.length : 0,
       checkedAt: new Date().toISOString()
