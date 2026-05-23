@@ -270,12 +270,63 @@ h2 {
   background: #c4c4c4;
 }
 
+.mosaic-card > button,
+.customer-photo > button {
+  position: relative;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
 .mosaic-card img,
 .customer-photo img {
   display: block;
   width: 100%;
   height: 180px;
   object-fit: cover;
+}
+
+.studio-panel > .studio-view {
+  display: grid;
+  gap: 14px;
+}
+
+.studio-panel > .studio-view > .studio-preview {
+  padding: 16px;
+  border-radius: 26px;
+  background: #d2d2d2;
+}
+
+.studio-panel > .studio-view > .studio-preview .preview-heading {
+  margin-bottom: 12px;
+}
+
+.studio-panel > .studio-view > .studio-preview .soft-label {
+  margin-bottom: 8px;
+}
+
+.studio-panel > .studio-view > .studio-preview .image-mosaic {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(165px, 190px));
+  justify-content: start;
+  align-items: start;
+  gap: 12px;
+}
+
+.studio-panel > .studio-view > .studio-preview .mosaic-card {
+  width: 100%;
+  border-radius: 20px;
+}
+
+.studio-panel > .studio-view > .studio-preview .mosaic-card .empty-photo-space {
+  min-height: 132px;
+  padding: 12px;
+  text-align: center;
+}
+
+.studio-panel > .studio-view > .studio-preview .buy-row {
+  padding: 9px 10px;
 }
 
 .entry-view {
@@ -383,14 +434,6 @@ h2 {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.customer-photo > button {
-  position: relative;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
 }
 
 .buy-row {
@@ -555,6 +598,10 @@ h2 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .studio-panel > .studio-view > .studio-preview .image-mosaic {
+    grid-template-columns: repeat(auto-fill, minmax(155px, 180px));
+  }
+
   .lightbox-photo-frame .watermark-layer {
     gap: 28px 64px;
     padding: 10% 9%;
@@ -576,6 +623,10 @@ h2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .studio-panel > .studio-view > .studio-preview .image-mosaic {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .mosaic-card img,
   .customer-photo img,
   .wall-tile img,
@@ -584,6 +635,10 @@ h2 {
   .empty-wall-tile {
     height: 170px;
     min-height: 170px;
+  }
+
+  .studio-panel > .studio-view > .studio-preview .mosaic-card .empty-photo-space {
+    min-height: 126px;
   }
 
   .wall-tile-stacked {
@@ -640,6 +695,10 @@ h2 {
     grid-template-columns: 1fr;
   }
 
+  .studio-panel > .studio-view > .studio-preview .image-mosaic {
+    grid-template-columns: 1fr;
+  }
+
   .mosaic-card img,
   .customer-photo img,
   .wall-tile img,
@@ -648,6 +707,10 @@ h2 {
   .empty-wall-tile {
     height: 220px;
     min-height: 220px;
+  }
+
+  .studio-panel > .studio-view > .studio-preview .mosaic-card .empty-photo-space {
+    min-height: 150px;
   }
 
   .wall-tile-stacked {

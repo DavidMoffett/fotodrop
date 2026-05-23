@@ -66,6 +66,13 @@ function App() {
   const [deletingPhotoId, setDeletingPhotoId] = useState('')
   const [deletingEventId, setDeletingEventId] = useState('')
 
+  function clearVisiblePhotosForNewTarget() {
+    setPhotos([])
+    setSelectedPhoto(null)
+    setLoadStatus('No photos loaded yet')
+    setDeleteStatus('No delete action yet')
+  }
+
   function mapSavedPhotoToPhoto(photo) {
     return {
       id: photo.id || photo.display_key || photo.file_name,
@@ -95,6 +102,8 @@ function App() {
       return
     }
 
+    setPhotos([])
+    setSelectedPhoto(null)
     setIsUploading(true)
     setUploadProgress({
       total: files.length,
@@ -156,7 +165,7 @@ function App() {
       setUploadStatus(`Uploaded ${index + 1} of ${files.length}`)
     }
 
-    setPhotos((currentPhotos) => [...uploadedPhotos, ...currentPhotos])
+    setPhotos(uploadedPhotos)
     setIsUploading(false)
     setUploadProgress({
       total: files.length,
@@ -164,7 +173,7 @@ function App() {
       currentFile: '',
     })
     setUploadStatus(`Uploaded ${uploadedPhotos.length} photo${uploadedPhotos.length === 1 ? '' : 's'}`)
-    setLoadStatus(`${uploadedPhotos.length} new photo${uploadedPhotos.length === 1 ? '' : 's'} added`)
+    setLoadStatus(`${uploadedPhotos.length} photo${uploadedPhotos.length === 1 ? '' : 's'} shown for this event`)
     event.target.value = ''
   }
 
@@ -222,6 +231,8 @@ function App() {
     setActiveEventId(event.id)
     setCollectionName(collection.name || 'FOTODECK')
     setEventName(event.name || 'Event')
+    setPhotos([])
+    setSelectedPhoto(null)
     setSavedStatus(`Selected ${collection.name || 'Collection'} / ${event.name || 'Event'}`)
     await handleLoadSavedPhotos(collection.id, event.id)
   }
@@ -486,6 +497,7 @@ function App() {
                     onChange={(event) => {
                       setCollectionName(event.target.value)
                       setActiveCollectionId('')
+                      clearVisiblePhotosForNewTarget()
                     }}
                     disabled={isUploading}
                   />
@@ -500,6 +512,7 @@ function App() {
                     onChange={(event) => {
                       setEventName(event.target.value)
                       setActiveEventId('')
+                      clearVisiblePhotosForNewTarget()
                     }}
                     disabled={isUploading}
                   />
