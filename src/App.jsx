@@ -49,6 +49,8 @@ function App() {
   const [view, setView] = useState('studio')
   const [collectionName, setCollectionName] = useState('FOTODECK')
   const [eventName, setEventName] = useState('Event')
+  const [activeCollectionId, setActiveCollectionId] = useState('')
+  const [activeEventId, setActiveEventId] = useState('')
   const [singlePhotoPrice, setSinglePhotoPrice] = useState('7')
   const [watermarkText, setWatermarkText] = useState('FOTODECK')
   const [photos, setPhotos] = useState([])
@@ -57,6 +59,9 @@ function App() {
   const [uploadStatus, setUploadStatus] = useState('No upload yet')
   const [uploadProgress, setUploadProgress] = useState(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [savedCollections, setSavedCollections] = useState([])
+  const [savedEvents, setSavedEvents] = useState([])
+  const [savedStatus, setSavedStatus] = useState('Saved collections not loaded yet')
 
   function mapSavedPhotoToPhoto(photo) {
     return {
@@ -70,6 +75,14 @@ function App() {
       uploadedTime: getUploadedTime(photo),
       watermarkText: photo.watermark_text || '',
     }
+  }
+
+  function getCurrentCollectionId() {
+    return activeCollectionId || makeSafeId(collectionName, 'fotodeck')
+  }
+
+  function getCurrentEventId() {
+    return activeEventId || makeSafeId(eventName, 'event')
   }
 
   async function handlePhotoSelection(event) {
@@ -87,8 +100,8 @@ function App() {
     })
     setUploadStatus(`Uploading 0 of ${files.length} photo${files.length === 1 ? '' : 's'}...`)
 
-    const collectionId = makeSafeId(collectionName, 'fotodeck')
-    const eventId = makeSafeId(eventName, 'event')
+    const collectionId = getCurrentCollectionId()
+    const eventId = getCurrentEventId()
     const uploadedPhotos = []
 
     for (let index = 0; index < files.length; index += 1) {
@@ -152,25 +165,62 @@ function App() {
     event.target.value = ''
   }
 
-  async function handleLoadSavedPhotos() {
-    setLoadStatus('Loading saved photos...')
+  async function handleLoadSavedPhotos(collectionIdOverride, eventIdOverride) {
+    const collectionId = collectionIdOverride || getCurrentCollectionId()
+    const eventId = eventIdOverride || getCurrentEventId()
+
+    setLoadStatus(`Loading saved photos for ${eventName || 'selected event'}...`)
 
     try {
-      const response = await fetch('/api/images')
+      const response = await fetch(
+        `/api/images?collectionId=${encodeURIComponent(collectionId)}&eventId=${encodeURIComponent(eventId)}`
+      )
       const result = await response.json()
 
       if (!response.ok || !result.ok || !result.images || result.images.length === 0) {
-        setLoadStatus(result.error || 'No saved photos found')
+        setPhotos([])
+        setLoadStatus(result.error || 'No saved photos found for this event')
         return
       }
 
       const savedPhotos = result.images.map(mapSavedPhotoToPhoto)
 
       setPhotos(savedPhotos)
-      setLoadStatus(`Loaded ${savedPhotos.length} saved photo${savedPhotos.length === 1 ? '' : 's'}`)
+      setLoadStatus(`Loaded ${savedPhotos.length} saved photo${savedPhotos.length === 1 ? '' : 's'} for this event`)
     } catch (error) {
       setLoadStatus(error.message || 'Saved photos could not be loaded')
     }
+  }
+
+  async function handleLoadSavedCollectionsEvents() {
+    setSavedStatus('Loading saved collections and events...')
+
+    try {
+      const response = await fetch('/api/collections-events')
+      const result = await response.json()
+
+      if (!response.ok || !result.ok) {
+        setSavedStatus(result.error || 'Saved collections could not be loaded')
+        return
+      }
+
+      setSavedCollections(result.collections || [])
+      setSavedEvents(result.events || [])
+      setSavedStatus(
+        `Loaded ${result.collectionCount || 0} collection${result.collectionCount === 1 ? '' : 's'} and ${result.eventCount || 0} event${result.eventCount === 1 ? '' : 's'}`
+      )
+    } catch (error) {
+      setSavedStatus(error.message || 'Saved collections could not be loaded')
+    }
+  }
+
+  async function handleSelectSavedEvent(collection, event) {
+    setActiveCollectionId(collection.id)
+    setActiveEventId(event.id)
+    setCollectionName(collection.name || 'FOTODECK')
+    setEventName(event.name || 'Event')
+    setSavedStatus(`Selected ${collection.name || 'Collection'} / ${event.name || 'Event'}`)
+    await handleLoadSavedPhotos(collection.id, event.id)
   }
 
   function handleReset() {
@@ -187,6 +237,8 @@ function App() {
     setView('studio')
     setCollectionName('FOTODECK')
     setEventName('Event')
+    setActiveCollectionId('')
+    setActiveEventId('')
     setSinglePhotoPrice('7')
     setWatermarkText('FOTODECK')
     setPhotos([])
@@ -259,8 +311,8 @@ function App() {
               <button type="button" onClick={() => setView('collection-wall')}>
                 Customer view
               </button>
-              <button type="button" onClick={handleLoadSavedPhotos}>
-                Load saved photos
+              <button type="button" onClick={() => handleLoadSavedPhotos()}>
+                Load current event
               </button>
               <button type="button" onClick={handleReset}>
                 Reset
@@ -303,7 +355,10 @@ function App() {
                     type="text"
                     value={collectionName}
                     placeholder="FOTODECK"
-                    onChange={(event) => setCollectionName(event.target.value)}
+                    onChange={(event) => {
+                      setCollectionName(event.target.value)
+                      setActiveCollectionId('')
+                    }}
                     disabled={isUploading}
                   />
                 </label>
@@ -314,7 +369,10 @@ function App() {
                     type="text"
                     value={eventName}
                     placeholder="Event"
-                    onChange={(event) => setEventName(event.target.value)}
+                    onChange={(event) => {
+                      setEventName(event.target.value)
+                      setActiveEventId('')
+                    }}
                     disabled={isUploading}
                   />
                 </label>
@@ -356,10 +414,82 @@ function App() {
                   disabled={isUploading}
                 />
 
-                <button className="photo-loader-button" type="button" onClick={handleLoadSavedPhotos} disabled={isUploading}>
-                  Load saved photos
+                <button className="photo-loader-button" type="button" onClick={() => handleLoadSavedPhotos()} disabled={isUploading}>
+                  Load current event
                 </button>
               </div>
+            </section>
+
+            <section className="studio-panel">
+              <div className="preview-heading">
+                <div>
+                  <p className="soft-label">
+                    Saved
+                  </p>
+                  <h1 style={smallHeadingStyle}>Collections / Events</h1>
+                </div>
+
+                <button className="dark-action" type="button" onClick={handleLoadSavedCollectionsEvents} disabled={isUploading}>
+                  Load saved list
+                </button>
+              </div>
+
+              <div className="empty-photo-space">
+                <strong>{savedStatus}</strong>
+              </div>
+
+              {savedCollections.length > 0 && (
+                <div className="studio-view">
+                  {savedCollections.map((collection) => {
+                    const collectionEvents = savedEvents.filter((event) => event.collection_id === collection.id)
+
+                    return (
+                      <section className="studio-preview" key={collection.id}>
+                        <div className="preview-heading">
+                          <div>
+                            <p className="soft-label">
+                              Collection
+                            </p>
+                            <h1 style={smallHeadingStyle}>{collection.name}</h1>
+                          </div>
+
+                          <div className="price-mark">
+                            {collection.photo_count} photo{collection.photo_count === 1 ? '' : 's'}
+                          </div>
+                        </div>
+
+                        {collectionEvents.length === 0 && (
+                          <div className="empty-photo-space">
+                            No events saved for this collection.
+                          </div>
+                        )}
+
+                        {collectionEvents.length > 0 && (
+                          <div className="image-mosaic">
+                            {collectionEvents.map((event) => (
+                              <article className="mosaic-card" key={event.id}>
+                                <button type="button" onClick={() => handleSelectSavedEvent(collection, event)} disabled={isUploading}>
+                                  <div className="empty-photo-space">
+                                    <strong>{event.name}</strong>
+                                    <br />
+                                    <span>
+                                      {event.photo_count} photo{event.photo_count === 1 ? '' : 's'}
+                                    </span>
+                                  </div>
+                                </button>
+
+                                <div className="buy-row">
+                                  <span>{event.id}</span>
+                                </div>
+                              </article>
+                            ))}
+                          </div>
+                        )}
+                      </section>
+                    )
+                  })}
+                </div>
+              )}
             </section>
 
             <section className="studio-preview">
