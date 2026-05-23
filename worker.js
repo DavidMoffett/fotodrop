@@ -605,6 +605,154 @@ async function handleDeleteImage(request, env) {
   }
 }
 
+async function handleDeleteEvent(request, env) {
+  if (request.method !== "POST") {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Delete event",
+        error: "Use POST with collectionId, eventId, confirmText"
+      },
+      405
+    );
+  }
+
+  if (!env.DB) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Delete event",
+        error: "D1 binding DB is missing"
+      },
+      500
+    );
+  }
+
+  if (!env.DISPLAY_BUCKET) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Delete event",
+        error: "R2 binding DISPLAY_BUCKET is missing"
+      },
+      500
+    );
+  }
+
+  try {
+    const body = await request.json();
+
+    const collectionId = body && body.collectionId ? String(body.collectionId).trim() : "";
+    const eventId = body && body.eventId ? String(body.eventId).trim() : "";
+    const confirmText = body && body.confirmText ? String(body.confirmText).trim() : "";
+
+    if (!collectionId || !eventId) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Delete event",
+          error: "collectionId and eventId are required"
+        },
+        400
+      );
+    }
+
+    if (confirmText !== "DELETE EVENT") {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Delete event",
+          error: "confirmText must be DELETE EVENT"
+        },
+        400
+      );
+    }
+
+    const event = await env.DB.prepare(`
+      SELECT
+        id,
+        collection_id,
+        name
+      FROM events
+      WHERE id = ?
+      AND collection_id = ?
+    `).bind(eventId, collectionId).first();
+
+    if (!event) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Delete event",
+          error: "Event was not found",
+          collectionId,
+          eventId
+        },
+        404
+      );
+    }
+
+    const imagesResult = await env.DB.prepare(`
+      SELECT
+        id,
+        file_name,
+        display_key
+      FROM images
+      WHERE collection_id = ?
+      AND event_id = ?
+    `).bind(collectionId, eventId).all();
+
+    const images = imagesResult.results || [];
+
+    for (const image of images) {
+      if (image.display_key) {
+        await env.DISPLAY_BUCKET.delete(image.display_key);
+      }
+    }
+
+    await env.DB.prepare(`
+      DELETE FROM images
+      WHERE collection_id = ?
+      AND event_id = ?
+    `).bind(collectionId, eventId).run();
+
+    await env.DB.prepare(`
+      DELETE FROM events
+      WHERE collection_id = ?
+      AND id = ?
+    `).bind(collectionId, eventId).run();
+
+    return jsonResponse({
+      ok: true,
+      app: "FOTODECK",
+      service: "Delete event",
+      deleted: {
+        collection_id: collectionId,
+        event_id: eventId,
+        event_name: event.name,
+        photo_count: images.length
+      },
+      checkedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Delete event",
+        error: error.message,
+        checkedAt: new Date().toISOString()
+      },
+      500
+    );
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -627,6 +775,10 @@ export default {
 
     if (url.pathname === "/api/delete-image") {
       return handleDeleteImage(request, env);
+    }
+
+    if (url.pathname === "/api/delete-event") {
+      return handleDeleteEvent(request, env);
     }
 
     if (env.ASSETS) {
