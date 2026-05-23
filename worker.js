@@ -492,6 +492,119 @@ async function handleUploadDisplay(request, env) {
   }
 }
 
+async function handleDeleteImage(request, env) {
+  if (request.method !== "POST") {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Delete single photo",
+        error: "Use POST with an imageId"
+      },
+      405
+    );
+  }
+
+  if (!env.DB) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Delete single photo",
+        error: "D1 binding DB is missing"
+      },
+      500
+    );
+  }
+
+  if (!env.DISPLAY_BUCKET) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Delete single photo",
+        error: "R2 binding DISPLAY_BUCKET is missing"
+      },
+      500
+    );
+  }
+
+  try {
+    const body = await request.json();
+    const imageId = body && body.imageId ? String(body.imageId).trim() : "";
+
+    if (!imageId) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Delete single photo",
+          error: "imageId is required"
+        },
+        400
+      );
+    }
+
+    const image = await env.DB.prepare(`
+      SELECT
+        id,
+        file_name,
+        display_key,
+        collection_id,
+        event_id
+      FROM images
+      WHERE id = ?
+    `).bind(imageId).first();
+
+    if (!image) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Delete single photo",
+          error: "Photo was not found",
+          imageId
+        },
+        404
+      );
+    }
+
+    if (image.display_key) {
+      await env.DISPLAY_BUCKET.delete(image.display_key);
+    }
+
+    await env.DB.prepare(`
+      DELETE FROM images
+      WHERE id = ?
+    `).bind(imageId).run();
+
+    return jsonResponse({
+      ok: true,
+      app: "FOTODECK",
+      service: "Delete single photo",
+      deleted: {
+        id: image.id,
+        file_name: image.file_name,
+        display_key: image.display_key,
+        collection_id: image.collection_id,
+        event_id: image.event_id
+      },
+      checkedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Delete single photo",
+        error: error.message,
+        checkedAt: new Date().toISOString()
+      },
+      500
+    );
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -510,6 +623,10 @@ export default {
 
     if (url.pathname === "/api/upload-display") {
       return handleUploadDisplay(request, env);
+    }
+
+    if (url.pathname === "/api/delete-image") {
+      return handleDeleteImage(request, env);
     }
 
     if (env.ASSETS) {
