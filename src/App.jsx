@@ -883,6 +883,25 @@ function App() {
               </div>
             </div>
 
+            <section className="studio-preview" style={{ marginBottom: '18px' }}>
+              <div className="preview-heading" style={{ marginBottom: 0 }}>
+                <div>
+                  <p className="soft-label">
+                    Cart
+                  </p>
+                  <h1 style={smallHeadingStyle}>
+                    {cartItems.length === 0
+                      ? 'No photos selected'
+                      : `${cartItems.length} photo${cartItems.length === 1 ? '' : 's'} selected / NZ$${cartTotal.toFixed(2)}`}
+                  </h1>
+                </div>
+
+                <button className="dark-action" type="button" onClick={handleCartCheckoutPlaceholder}>
+                  Checkout
+                </button>
+              </div>
+            </section>
+
             {photos.length === 0 && (
               <div className="empty-photo-space">
                 No photos have been added yet.
@@ -926,7 +945,7 @@ function App() {
               <div className="preview-heading">
                 <div>
                   <p className="soft-label">
-                    Cart
+                    Checkout details
                   </p>
                   <h1 style={smallHeadingStyle}>
                     {cartItems.length} photo{cartItems.length === 1 ? '' : 's'} / NZ${cartTotal.toFixed(2)}
