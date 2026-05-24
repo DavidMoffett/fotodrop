@@ -78,12 +78,18 @@ function App() {
   const [deleteStatus, setDeleteStatus] = useState('No delete action yet')
   const [deletingPhotoId, setDeletingPhotoId] = useState('')
   const [deletingEventId, setDeletingEventId] = useState('')
+  const [cartItems, setCartItems] = useState([])
+  const [buyerEmail, setBuyerEmail] = useState('')
+  const [cartStatus, setCartStatus] = useState('Cart is empty')
 
   function clearVisiblePhotosForNewTarget() {
     setPhotos([])
     setSelectedPhoto(null)
     setLoadStatus('No photos loaded yet')
     setDeleteStatus('No delete action yet')
+    setCartItems([])
+    setBuyerEmail('')
+    setCartStatus('Cart is empty')
   }
 
   function mapSavedPhotoToPhoto(photo) {
@@ -108,6 +114,62 @@ function App() {
     return activeEventId || makeSafeId(eventName, 'event')
   }
 
+  function getPhotoPrice(photo) {
+    if (photo.priceCents && Number(photo.priceCents) > 0) {
+      return Number(photo.priceCents) / 100
+    }
+
+    const parsedPrice = Number(singlePhotoPrice)
+
+    if (Number.isNaN(parsedPrice)) {
+      return 0
+    }
+
+    return parsedPrice
+  }
+
+  function getCartTotal() {
+    return cartItems.reduce((total, photo) => total + getPhotoPrice(photo), 0)
+  }
+
+  function isPhotoInCart(photo) {
+    return cartItems.some((item) => item.id === photo.id)
+  }
+
+  function handleAddToCart(photo) {
+    if (isPhotoInCart(photo)) {
+      setCartStatus(`${photo.name} is already in the cart`)
+      return
+    }
+
+    setCartItems((currentItems) => [...currentItems, photo])
+    setCartStatus(`Added ${photo.name}`)
+  }
+
+  function handleRemoveFromCart(photo) {
+    setCartItems((currentItems) => currentItems.filter((item) => item.id !== photo.id))
+    setCartStatus(`Removed ${photo.name}`)
+  }
+
+  function handleClearCart() {
+    setCartItems([])
+    setCartStatus('Cart cleared')
+  }
+
+  function handleCartCheckoutPlaceholder() {
+    if (cartItems.length === 0) {
+      setCartStatus('Add at least one photo before checkout')
+      return
+    }
+
+    if (!buyerEmail || !buyerEmail.includes('@')) {
+      setCartStatus('Enter buyer email before checkout')
+      return
+    }
+
+    window.alert('PayPal checkout is next. Cart selection and buyer email are ready.')
+  }
+
   async function handlePhotoSelection(event) {
     const files = Array.from(event.target.files || [])
 
@@ -117,6 +179,9 @@ function App() {
 
     setPhotos([])
     setSelectedPhoto(null)
+    setCartItems([])
+    setBuyerEmail('')
+    setCartStatus('Cart is empty')
     setIsUploading(true)
     setUploadProgress({
       total: files.length,
@@ -206,6 +271,8 @@ function App() {
 
       if (!response.ok || !result.ok || !result.images || result.images.length === 0) {
         setPhotos([])
+        setCartItems([])
+        setCartStatus('Cart is empty')
         setLoadStatus(result.error || 'No saved photos found for this event')
         return
       }
@@ -213,6 +280,8 @@ function App() {
       const savedPhotos = sortPhotosFirstFirst(result.images.map(mapSavedPhotoToPhoto))
 
       setPhotos(savedPhotos)
+      setCartItems([])
+      setCartStatus('Cart is empty')
       setLoadStatus(`Loaded ${savedPhotos.length} saved photo${savedPhotos.length === 1 ? '' : 's'} for this event`)
     } catch (error) {
       setLoadStatus(error.message || 'Saved photos could not be loaded')
@@ -248,6 +317,9 @@ function App() {
     setEventName(event.name || 'Event')
     setPhotos([])
     setSelectedPhoto(null)
+    setCartItems([])
+    setBuyerEmail('')
+    setCartStatus('Cart is empty')
     setSavedStatus(`Selected ${collection.name || 'Collection'} / ${event.name || 'Event'}`)
     await handleLoadSavedPhotos(collection.id, event.id)
   }
@@ -284,6 +356,7 @@ function App() {
       }
 
       setPhotos((currentPhotos) => currentPhotos.filter((item) => item.id !== photo.id))
+      setCartItems((currentItems) => currentItems.filter((item) => item.id !== photo.id))
 
       if (selectedPhoto && selectedPhoto.id === photo.id) {
         setSelectedPhoto(null)
@@ -362,6 +435,9 @@ function App() {
         setEventName('Event')
         setPhotos([])
         setSelectedPhoto(null)
+        setCartItems([])
+        setBuyerEmail('')
+        setCartStatus('Cart is empty')
         setLoadStatus('Deleted event removed from current view')
       }
 
@@ -400,6 +476,9 @@ function App() {
     setDeleteStatus('No delete action yet')
     setDeletingPhotoId('')
     setDeletingEventId('')
+    setCartItems([])
+    setBuyerEmail('')
+    setCartStatus('Cart is empty')
   }
 
   function handleAdminReturn() {
@@ -412,11 +491,7 @@ function App() {
   }
 
   function handlePurchaseStart(photo) {
-    setSelectedPhoto(photo)
-  }
-
-  function handlePurchasePlaceholder() {
-    window.alert('Purchase flow next. Not connected yet.')
+    handleAddToCart(photo)
   }
 
   function renderWatermark(text) {
@@ -433,6 +508,7 @@ function App() {
   }
 
   const tilePhoto = photos[0]?.previewUrl || null
+  const cartTotal = getCartTotal()
   const isStudioView = view === 'studio'
   const smallHeadingStyle = {
     fontSize: '0.8rem',
@@ -803,7 +879,7 @@ function App() {
               </div>
 
               <div className="price-mark">
-                NZ${singlePhotoPrice || '0'}
+                {cartItems.length} selected / NZ${cartTotal.toFixed(2)}
               </div>
             </div>
 
@@ -815,23 +891,85 @@ function App() {
 
             {photos.length > 0 && (
               <div className="customer-grid">
-                {photos.map((photo) => (
-                  <article className="customer-photo" key={photo.id}>
-                    <button type="button" onClick={() => setSelectedPhoto(photo)}>
-                      <img src={photo.previewUrl} alt={photo.name} />
-                      {renderWatermark(watermarkText)}
-                    </button>
+                {photos.map((photo) => {
+                  const inCart = isPhotoInCart(photo)
 
-                    <div className="buy-row">
-                      <span>{photo.name}</span>
-                      <button type="button" onClick={() => handlePurchaseStart(photo)}>
-                        Buy NZ${singlePhotoPrice || '0'}
+                  return (
+                    <article className="customer-photo" key={photo.id}>
+                      <button type="button" onClick={() => setSelectedPhoto(photo)}>
+                        <img src={photo.previewUrl} alt={photo.name} />
+                        {renderWatermark(watermarkText)}
                       </button>
-                    </div>
-                  </article>
-                ))}
+
+                      <div className="buy-row">
+                        <span>{photo.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (inCart) {
+                              handleRemoveFromCart(photo)
+                            } else {
+                              handlePurchaseStart(photo)
+                            }
+                          }}
+                        >
+                          {inCart ? 'Remove' : `Add NZ$${getPhotoPrice(photo).toFixed(2)}`}
+                        </button>
+                      </div>
+                    </article>
+                  )
+                })}
               </div>
             )}
+
+            <section className="studio-preview" style={{ marginTop: '18px' }}>
+              <div className="preview-heading">
+                <div>
+                  <p className="soft-label">
+                    Cart
+                  </p>
+                  <h1 style={smallHeadingStyle}>
+                    {cartItems.length} photo{cartItems.length === 1 ? '' : 's'} / NZ${cartTotal.toFixed(2)}
+                  </h1>
+                </div>
+
+                <button className="dark-action" type="button" onClick={handleCartCheckoutPlaceholder}>
+                  Checkout
+                </button>
+              </div>
+
+              <div className="studio-fields">
+                <label>
+                  Email for download link
+                  <input
+                    type="email"
+                    value={buyerEmail}
+                    placeholder="buyer@example.com"
+                    onChange={(event) => setBuyerEmail(event.target.value)}
+                  />
+                </label>
+              </div>
+
+              <div className="empty-photo-space" style={{ marginTop: '12px' }}>
+                <strong>{cartStatus}</strong>
+                {cartItems.length > 0 && (
+                  <>
+                    <br />
+                    <span>
+                      {cartItems.map((item) => item.name).join(', ')}
+                    </span>
+                  </>
+                )}
+                {cartItems.length > 0 && (
+                  <>
+                    <br />
+                    <button type="button" onClick={handleClearCart}>
+                      Clear cart
+                    </button>
+                  </>
+                )}
+              </div>
+            </section>
 
             <button className="back-button" type="button" onClick={() => setView('event-wall')}>
               Back to events
@@ -859,11 +997,20 @@ function App() {
 
               <div className="lightbox-bottom">
                 <p>
-                  Buy this photo for NZ${singlePhotoPrice || '0'}
+                  NZ${getPhotoPrice(selectedPhoto).toFixed(2)}
                 </p>
 
-                <button type="button" onClick={handlePurchasePlaceholder}>
-                  Confirm purchase
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isPhotoInCart(selectedPhoto)) {
+                      handleRemoveFromCart(selectedPhoto)
+                    } else {
+                      handleAddToCart(selectedPhoto)
+                    }
+                  }}
+                >
+                  {isPhotoInCart(selectedPhoto) ? 'Remove from cart' : 'Add to cart'}
                 </button>
               </div>
             </div>
