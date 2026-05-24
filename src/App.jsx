@@ -45,6 +45,19 @@ function getUploadedTime(photo) {
   )
 }
 
+function getPhotoSortName(photo) {
+  return photo?.name || photo?.file_name || photo?.displayKey || photo?.display_key || photo?.id || ''
+}
+
+function sortPhotosFirstFirst(photosToSort) {
+  return [...photosToSort].sort((firstPhoto, secondPhoto) =>
+    getPhotoSortName(firstPhoto).localeCompare(getPhotoSortName(secondPhoto), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    })
+  )
+}
+
 function App() {
   const [view, setView] = useState('studio')
   const [collectionName, setCollectionName] = useState('FOTODECK')
@@ -165,15 +178,17 @@ function App() {
       setUploadStatus(`Uploaded ${index + 1} of ${files.length}`)
     }
 
-    setPhotos(uploadedPhotos)
+    const sortedUploadedPhotos = sortPhotosFirstFirst(uploadedPhotos)
+
+    setPhotos(sortedUploadedPhotos)
     setIsUploading(false)
     setUploadProgress({
       total: files.length,
-      completed: uploadedPhotos.length,
+      completed: sortedUploadedPhotos.length,
       currentFile: '',
     })
-    setUploadStatus(`Uploaded ${uploadedPhotos.length} photo${uploadedPhotos.length === 1 ? '' : 's'}`)
-    setLoadStatus(`${uploadedPhotos.length} photo${uploadedPhotos.length === 1 ? '' : 's'} shown for this event`)
+    setUploadStatus(`Uploaded ${sortedUploadedPhotos.length} photo${sortedUploadedPhotos.length === 1 ? '' : 's'}`)
+    setLoadStatus(`${sortedUploadedPhotos.length} photo${sortedUploadedPhotos.length === 1 ? '' : 's'} shown for this event`)
     event.target.value = ''
   }
 
@@ -195,7 +210,7 @@ function App() {
         return
       }
 
-      const savedPhotos = result.images.map(mapSavedPhotoToPhoto)
+      const savedPhotos = sortPhotosFirstFirst(result.images.map(mapSavedPhotoToPhoto))
 
       setPhotos(savedPhotos)
       setLoadStatus(`Loaded ${savedPhotos.length} saved photo${savedPhotos.length === 1 ? '' : 's'} for this event`)
