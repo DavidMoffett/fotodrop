@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 import './App.css'
 
 function makeSafeId(value, fallback) {
@@ -77,6 +77,8 @@ function getInitialView() {
 }
 
 function App() {
+  const checkoutRef = useRef(null)
+
   const [view, setView] = useState(getInitialView)
   const [collectionName, setCollectionName] = useState('FOTODECK')
   const [eventName, setEventName] = useState('Event')
@@ -268,6 +270,33 @@ function App() {
     setCartStatus('Cart cleared')
   }
 
+  function handleScrollToCheckout() {
+    setCartStatus(
+      cartItems.length === 0
+        ? 'Select photos first, then checkout.'
+        : 'Check your selected photos and enter email below.'
+    )
+
+    window.setTimeout(() => {
+      if (checkoutRef.current) {
+        checkoutRef.current.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        })
+      }
+    }, 50)
+  }
+
+  async function handleBackToEvents() {
+    setSelectedPhoto(null)
+    setView('public-collections')
+    window.history.pushState({}, document.title, '/view')
+
+    if (savedCollections.length === 0 || savedEvents.length === 0) {
+      await handleLoadSavedCollectionsEvents()
+    }
+  }
+
   async function handleLandingSignup(event) {
     event.preventDefault()
 
@@ -298,7 +327,7 @@ function App() {
     }
 
     window.localStorage.setItem('fotodeck_visitor', JSON.stringify(signup))
-    setSignupStatus('Opening Collections...')
+    setSignupStatus('Opening Events...')
     setView('public-collections')
     window.history.pushState({}, document.title, '/view')
     await handleLoadSavedCollectionsEvents()
@@ -616,7 +645,7 @@ function App() {
   }
 
   async function handleLoadSavedCollectionsEvents() {
-    setSavedStatus('Loading...')
+    setSavedStatus('Loading events...')
 
     try {
       const response = await fetch('/api/collections-events')
@@ -626,7 +655,7 @@ function App() {
         setSavedCollections([])
         setSavedEvents([])
         setEventCoverUrls({})
-        setSavedStatus(result.error || 'Photos could not be loaded')
+        setSavedStatus(result.error || 'Events could not be loaded')
         return
       }
 
@@ -636,13 +665,14 @@ function App() {
       setSavedCollections(nextCollections)
       setSavedEvents(nextEvents)
       setSavedStatus('')
+      setEventCoverUrls({})
 
-      await loadEventCoverPhotos(nextCollections, nextEvents)
+      loadEventCoverPhotos(nextCollections, nextEvents)
     } catch (error) {
       setSavedCollections([])
       setSavedEvents([])
       setEventCoverUrls({})
-      setSavedStatus(error.message || 'Photos could not be loaded')
+      setSavedStatus(error.message || 'Events could not be loaded')
     }
   }
 
@@ -912,7 +942,8 @@ function App() {
             display: 'grid',
             gap: '10px',
             textAlign: 'center',
-            marginBottom: '34px',
+            margin: '0 auto 34px',
+            width: '100%',
           }}
         >
           <h1
@@ -922,6 +953,7 @@ function App() {
               lineHeight: 1,
               letterSpacing: '-0.08em',
               color: '#111827',
+              textAlign: 'center',
             }}
           >
             FOTODECK
@@ -932,9 +964,10 @@ function App() {
               margin: 0,
               fontSize: '1.25rem',
               color: '#374151',
+              textAlign: 'center',
             }}
           >
-            Choose your photos
+            Choose your Event
           </p>
         </div>
 
@@ -947,6 +980,7 @@ function App() {
               color: '#374151',
               marginBottom: '20px',
               boxShadow: '0 12px 30px rgba(17, 24, 39, 0.08)',
+              textAlign: 'center',
             }}
           >
             {savedStatus}
@@ -961,9 +995,10 @@ function App() {
               background: '#ffffff',
               color: '#374151',
               boxShadow: '0 12px 30px rgba(17, 24, 39, 0.08)',
+              textAlign: 'center',
             }}
           >
-            No photo collections are available yet.
+            No photo events are available yet.
           </div>
         )}
 
@@ -1126,7 +1161,7 @@ function App() {
               placeItems: 'center',
               padding: '28px 20px',
               background:
-                'linear-gradient(90deg, rgba(5,10,20,0.72), rgba(5,10,20,0.34), rgba(5,10,20,0.1)), url("/fotodeck-landing.jpg") center/cover no-repeat',
+                'linear-gradient(90deg, rgba(5,10,20,0.58), rgba(5,10,20,0.18), rgba(5,10,20,0.02)), url("/fotodeck-landing.jpg") center/cover no-repeat',
             }}
           >
             <button
@@ -1152,17 +1187,17 @@ function App() {
             <section
               style={{
                 width: '100%',
-                maxWidth: '560px',
+                maxWidth: '520px',
                 justifySelf: 'start',
-                marginLeft: 'min(7vw, 84px)',
+                marginLeft: 'min(6vw, 72px)',
                 display: 'grid',
-                gap: '24px',
+                gap: '22px',
                 textAlign: 'left',
-                padding: '34px',
+                padding: '30px',
                 borderRadius: '34px',
-                background: 'rgba(255, 255, 255, 0.86)',
-                boxShadow: '0 28px 80px rgba(0, 0, 0, 0.26)',
-                backdropFilter: 'blur(12px)',
+                background: 'rgba(255, 255, 255, 0.58)',
+                boxShadow: '0 28px 80px rgba(0, 0, 0, 0.24)',
+                backdropFilter: 'blur(7px)',
               }}
             >
               <div>
@@ -1181,8 +1216,8 @@ function App() {
                   style={{
                     margin: '12px 0 0',
                     fontSize: '1.15rem',
-                    color: '#1f2937',
-                    fontWeight: 700,
+                    color: '#111827',
+                    fontWeight: 800,
                   }}
                 >
                   Enter your details to view photos.
@@ -1536,9 +1571,15 @@ function App() {
                   </h1>
                 </div>
 
-                <button className="dark-action" type="button" onClick={handleCartCheckout} disabled={isCheckingOut}>
-                  {isCheckingOut ? 'Opening PayPal...' : 'Checkout'}
-                </button>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  <button type="button" onClick={handleBackToEvents}>
+                    Back to Events
+                  </button>
+
+                  <button className="dark-action" type="button" onClick={handleScrollToCheckout} disabled={isCheckingOut}>
+                    Checkout
+                  </button>
+                </div>
               </div>
             </section>
 
@@ -1580,7 +1621,7 @@ function App() {
               </div>
             )}
 
-            <section className="studio-preview" style={{ marginTop: '18px' }}>
+            <section ref={checkoutRef} className="studio-preview" style={{ marginTop: '18px', scrollMarginTop: '20px' }}>
               <div className="preview-heading">
                 <div>
                   <p className="soft-label">
@@ -1592,7 +1633,7 @@ function App() {
                 </div>
 
                 <button className="dark-action" type="button" onClick={handleCartCheckout} disabled={isCheckingOut}>
-                  {isCheckingOut ? 'Opening PayPal...' : 'Checkout'}
+                  {isCheckingOut ? 'Opening PayPal...' : 'Pay with PayPal'}
                 </button>
               </div>
 
