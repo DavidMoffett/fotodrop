@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import './App.css'
 
 function makeSafeId(value, fallback) {
@@ -81,6 +81,53 @@ function App() {
   const [cartItems, setCartItems] = useState([])
   const [buyerEmail, setBuyerEmail] = useState('')
   const [cartStatus, setCartStatus] = useState('Cart is empty')
+  const [isCheckingOut, setIsCheckingOut] = useState(false)
+
+  useEffect(() => {
+    async function captureReturnedPaypalOrder(localOrderId) {
+      setCartStatus('Confirming PayPal payment...')
+
+      try {
+        const response = await fetch('/api/paypal-capture-order', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            localOrderId,
+          }),
+        })
+
+        const result = await response.json()
+
+        if (!response.ok || !result.ok) {
+          setCartStatus(result.error || 'PayPal payment could not be confirmed')
+          return
+        }
+
+        setCartStatus('Payment complete. Download delivery is next.')
+        setCartItems([])
+        setBuyerEmail('')
+      } catch (error) {
+        setCartStatus(error.message || 'PayPal payment could not be confirmed')
+      }
+    }
+
+    const params = new URLSearchParams(window.location.search)
+    const paypalStatus = params.get('paypal')
+    const localOrderId = params.get('localOrderId')
+
+    if (paypalStatus === 'cancel') {
+      setCartStatus('PayPal checkout cancelled')
+      window.history.replaceState({}, document.title, window.location.pathname)
+      return
+    }
+
+    if (paypalStatus === 'return' && localOrderId) {
+      captureReturnedPaypalOrder(localOrderId)
+      window.history.replaceState({}, document.title, window.location.pathname)
+    }
+  }, [])
 
   function clearVisiblePhotosForNewTarget() {
     setPhotos([])
@@ -90,6 +137,7 @@ function App() {
     setCartItems([])
     setBuyerEmail('')
     setCartStatus('Cart is empty')
+    setIsCheckingOut(false)
   }
 
   function mapSavedPhotoToPhoto(photo) {
@@ -162,7 +210,7 @@ function App() {
     setCartStatus('Cart cleared')
   }
 
-  function handleCartCheckoutPlaceholder() {
+  async function handleCartCheckout() {
     if (cartItems.length === 0) {
       setCartStatus('Add at least one photo before checkout')
       return
@@ -173,7 +221,36 @@ function App() {
       return
     }
 
-    window.alert('PayPal checkout is next. Cart selection and buyer email are ready.')
+    setIsCheckingOut(true)
+    setCartStatus('Opening PayPal checkout...')
+
+    try {
+      const response = await fetch('/api/paypal-create-order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          collectionId: getCurrentCollectionId(),
+          eventId: getCurrentEventId(),
+          buyerEmail,
+          imageIds: cartItems.map((item) => item.id),
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok || !result.ok || !result.approvalUrl) {
+        setCartStatus(result.error || 'PayPal checkout could not be opened')
+        setIsCheckingOut(false)
+        return
+      }
+
+      window.location.href = result.approvalUrl
+    } catch (error) {
+      setCartStatus(error.message || 'PayPal checkout could not be opened')
+      setIsCheckingOut(false)
+    }
   }
 
   async function handlePhotoSelection(event) {
@@ -485,6 +562,7 @@ function App() {
     setCartItems([])
     setBuyerEmail('')
     setCartStatus('Cart is empty')
+    setIsCheckingOut(false)
   }
 
   function handleAdminReturn() {
@@ -898,8 +976,8 @@ function App() {
                   </h1>
                 </div>
 
-                <button className="dark-action" type="button" onClick={handleCartCheckoutPlaceholder}>
-                  Checkout
+                <button className="dark-action" type="button" onClick={handleCartCheckout} disabled={isCheckingOut}>
+                  {isCheckingOut ? 'Opening PayPal...' : 'Checkout'}
                 </button>
               </div>
             </section>
@@ -953,8 +1031,8 @@ function App() {
                   </h1>
                 </div>
 
-                <button className="dark-action" type="button" onClick={handleCartCheckoutPlaceholder}>
-                  Checkout
+                <button className="dark-action" type="button" onClick={handleCartCheckout} disabled={isCheckingOut}>
+                  {isCheckingOut ? 'Opening PayPal...' : 'Checkout'}
                 </button>
               </div>
 
@@ -966,6 +1044,7 @@ function App() {
                     value={buyerEmail}
                     placeholder="buyer@example.com"
                     onChange={(event) => setBuyerEmail(event.target.value)}
+                    disabled={isCheckingOut}
                   />
                 </label>
               </div>
@@ -985,7 +1064,7 @@ function App() {
                         }}
                       >
                         <span>{item.name}</span>
-                        <button type="button" onClick={() => handleRemoveFromCart(item)}>
+                        <button type="button" onClick={() => handleRemoveFromCart(item)} disabled={isCheckingOut}>
                           Remove
                         </button>
                       </div>
@@ -996,7 +1075,7 @@ function App() {
                 {cartItems.length > 0 && (
                   <>
                     <br />
-                    <button type="button" onClick={handleClearCart}>
+                    <button type="button" onClick={handleClearCart} disabled={isCheckingOut}>
                       Clear cart
                     </button>
                   </>
