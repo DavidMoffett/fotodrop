@@ -280,17 +280,17 @@ function App() {
     const phone = signupPhone.trim()
 
     if (!businessName) {
-      setSignupStatus('Enter your business or photography name')
+      setSignupStatus('Enter name')
       return
     }
 
     if (!email || !email.includes('@')) {
-      setSignupStatus('Enter a valid email address')
+      setSignupStatus('Enter email')
       return
     }
 
     if (!phone) {
-      setSignupStatus('Enter your phone number')
+      setSignupStatus('Enter phone')
       return
     }
 
@@ -304,7 +304,10 @@ function App() {
     window.localStorage.setItem('fotodeck_signup', JSON.stringify(signup))
     window.localStorage.setItem('fotodeck_business_name', businessName)
 
-    setSignupStatus('Thanks — your FOTODECK start details are saved.')
+    setCollectionName(businessName)
+    setSignupStatus('Details saved. Opening FOTODECK...')
+
+    window.location.href = '/admin'
   }
 
   function handleSecretAdminOpen() {
@@ -797,6 +800,14 @@ function App() {
     }
   }
 
+  function handleSecretAdminOpen() {
+    const answer = window.prompt('Security word')
+
+    if (answer && answer.trim().toLowerCase() === 'funga safari') {
+      window.location.href = '/admin'
+    }
+  }
+
   function renderWatermark(text) {
     const mark = text && String(text).trim() ? text.trim() : 'FOTODECK'
     const items = Array.from({ length: 12 }, (_, index) => `${mark}-${index}`)
@@ -810,7 +821,6 @@ function App() {
     )
   }
 
-  const tilePhoto = photos[0]?.previewUrl || null
   const cartTotal = getCartTotal()
   const isStudioView = view === 'studio'
   const smallHeadingStyle = {
@@ -895,24 +905,26 @@ function App() {
             <section className="studio-panel" style={{ textAlign: 'center' }}>
               <div className="preview-heading" style={{ justifyContent: 'center' }}>
                 <div>
-                  <p className="soft-label">
-                    FOTODECK
-                  </p>
-
                   <h1 style={{ fontSize: '1.45rem', lineHeight: '1.1', letterSpacing: '-0.03em' }}>
-                    Sell event photos without the mess.
+                    FOTODECK
                   </h1>
                 </div>
               </div>
 
               <form onSubmit={handleLandingSignup}>
-                <div className="studio-fields">
+                <div
+                  className="studio-fields"
+                  style={{
+                    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                    alignItems: 'end',
+                  }}
+                >
                   <label>
-                    Business / Photography name
+                    Name
                     <input
                       type="text"
                       value={signupBusinessName}
-                      placeholder="Northside Photography"
+                      placeholder="Name"
                       onChange={(event) => setSignupBusinessName(event.target.value)}
                     />
                   </label>
@@ -922,7 +934,7 @@ function App() {
                     <input
                       type="email"
                       value={signupEmail}
-                      placeholder="you@example.com"
+                      placeholder="Email"
                       onChange={(event) => setSignupEmail(event.target.value)}
                     />
                   </label>
@@ -932,7 +944,7 @@ function App() {
                     <input
                       type="tel"
                       value={signupPhone}
-                      placeholder="021 000 0000"
+                      placeholder="Phone"
                       onChange={(event) => setSignupPhone(event.target.value)}
                     />
                   </label>
@@ -945,9 +957,11 @@ function App() {
                 </div>
               </form>
 
-              <div className="empty-photo-space">
-                <strong>{signupStatus || 'Fast photo collections. Clean checkout. Simple delivery.'}</strong>
-              </div>
+              {signupStatus && (
+                <div className="empty-photo-space">
+                  <strong>{signupStatus}</strong>
+                </div>
+              )}
             </section>
           </section>
         )}
