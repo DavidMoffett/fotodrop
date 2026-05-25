@@ -93,6 +93,7 @@ function App() {
   const [savedCollections, setSavedCollections] = useState([])
   const [savedEvents, setSavedEvents] = useState([])
   const [savedStatus, setSavedStatus] = useState('')
+  const [eventCoverUrls, setEventCoverUrls] = useState({})
   const [deleteStatus, setDeleteStatus] = useState('No delete action yet')
   const [deletingPhotoId, setDeletingPhotoId] = useState('')
   const [deletingEventId, setDeletingEventId] = useState('')
@@ -578,6 +579,42 @@ function App() {
     }
   }
 
+  async function loadEventCoverPhotos(collectionsToUse, eventsToUse) {
+    const nextCoverUrls = {}
+
+    await Promise.all(
+      eventsToUse.map(async (event) => {
+        try {
+          const collection = collectionsToUse.find((item) => item.id === event.collection_id)
+
+          if (!collection) {
+            return
+          }
+
+          const response = await fetch(
+            `/api/images?collectionId=${encodeURIComponent(collection.id)}&eventId=${encodeURIComponent(event.id)}`
+          )
+          const result = await response.json()
+
+          if (!response.ok || !result.ok || !result.images || result.images.length === 0) {
+            return
+          }
+
+          const sortedImages = sortPhotosFirstFirst(result.images)
+          const firstImage = sortedImages[0]
+
+          if (firstImage?.display_key) {
+            nextCoverUrls[event.id] = makeDisplayPhotoUrl(firstImage.display_key)
+          }
+        } catch {
+          nextCoverUrls[event.id] = ''
+        }
+      })
+    )
+
+    setEventCoverUrls(nextCoverUrls)
+  }
+
   async function handleLoadSavedCollectionsEvents() {
     setSavedStatus('Loading...')
 
@@ -588,16 +625,23 @@ function App() {
       if (!response.ok || !result.ok) {
         setSavedCollections([])
         setSavedEvents([])
+        setEventCoverUrls({})
         setSavedStatus(result.error || 'Photos could not be loaded')
         return
       }
 
-      setSavedCollections(result.collections || [])
-      setSavedEvents(result.events || [])
+      const nextCollections = result.collections || []
+      const nextEvents = result.events || []
+
+      setSavedCollections(nextCollections)
+      setSavedEvents(nextEvents)
       setSavedStatus('')
+
+      await loadEventCoverPhotos(nextCollections, nextEvents)
     } catch (error) {
       setSavedCollections([])
       setSavedEvents([])
+      setEventCoverUrls({})
       setSavedStatus(error.message || 'Photos could not be loaded')
     }
   }
@@ -838,24 +882,45 @@ function App() {
       <section
         style={{
           width: '100%',
-          maxWidth: '1080px',
+          maxWidth: '1120px',
           margin: '0 auto',
-          padding: '42px 22px 70px',
+          padding: '34px 20px 70px',
         }}
       >
+        <button
+          type="button"
+          onClick={handleAdminReturn}
+          aria-label="Admin return"
+          title=""
+          style={{
+            position: 'fixed',
+            top: '18px',
+            right: '18px',
+            width: '9px',
+            height: '9px',
+            padding: 0,
+            border: 0,
+            borderRadius: '999px',
+            background: 'rgba(34, 34, 34, 0.22)',
+            cursor: 'pointer',
+            zIndex: 10,
+          }}
+        />
+
         <div
           style={{
             display: 'grid',
             gap: '10px',
+            textAlign: 'center',
             marginBottom: '34px',
           }}
         >
           <h1
             style={{
               margin: 0,
-              fontSize: '2.6rem',
+              fontSize: '3rem',
               lineHeight: 1,
-              letterSpacing: '-0.07em',
+              letterSpacing: '-0.08em',
               color: '#111827',
             }}
           >
@@ -865,7 +930,7 @@ function App() {
           <p
             style={{
               margin: 0,
-              fontSize: '1.2rem',
+              fontSize: '1.25rem',
               color: '#374151',
             }}
           >
@@ -905,7 +970,7 @@ function App() {
         <div
           style={{
             display: 'grid',
-            gap: '24px',
+            gap: '36px',
           }}
         >
           {visibleCollections.map((collection) => {
@@ -916,15 +981,16 @@ function App() {
                 key={collection.id}
                 style={{
                   display: 'grid',
-                  gap: '14px',
+                  gap: '16px',
                 }}
               >
                 <h2
                   style={{
                     margin: 0,
-                    fontSize: '1.15rem',
+                    fontSize: '1.25rem',
                     color: '#111827',
                     letterSpacing: '-0.03em',
+                    textAlign: 'center',
                   }}
                 >
                   {collection.name}
@@ -933,60 +999,70 @@ function App() {
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
-                    gap: '16px',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                    gap: '18px',
                   }}
                 >
-                  {collectionEvents.map((event) => (
-                    <button
-                      key={event.id}
-                      type="button"
-                      onClick={() => handleOpenPublicEvent(collection, event)}
-                      style={{
-                        minHeight: '160px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        gap: '18px',
-                        textAlign: 'left',
-                        padding: '22px',
-                        border: '1px solid rgba(17, 24, 39, 0.08)',
-                        borderRadius: '28px',
-                        background: '#ffffff',
-                        color: '#111827',
-                        boxShadow: '0 16px 36px rgba(17, 24, 39, 0.09)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: '1.35rem',
-                          lineHeight: 1.08,
-                          fontWeight: 800,
-                          letterSpacing: '-0.04em',
-                        }}
-                      >
-                        {event.name}
-                      </span>
+                  {collectionEvents.map((event) => {
+                    const coverUrl = eventCoverUrls[event.id] || ''
 
-                      <span
+                    return (
+                      <button
+                        key={event.id}
+                        type="button"
+                        onClick={() => handleOpenPublicEvent(collection, event)}
                         style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: '9px 14px',
-                          borderRadius: '999px',
-                          background: '#111827',
+                          minHeight: '240px',
+                          position: 'relative',
+                          overflow: 'hidden',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'flex-end',
+                          alignItems: 'flex-start',
+                          gap: '14px',
+                          textAlign: 'left',
+                          padding: '24px',
+                          border: '1px solid rgba(17, 24, 39, 0.08)',
+                          borderRadius: '30px',
+                          background: coverUrl
+                            ? `linear-gradient(180deg, rgba(17,24,39,0.05), rgba(17,24,39,0.78)), url("${coverUrl}") center/cover`
+                            : 'linear-gradient(135deg, #ffffff, #d1d5db)',
                           color: '#ffffff',
-                          fontSize: '0.95rem',
-                          fontWeight: 800,
+                          boxShadow: '0 18px 42px rgba(17, 24, 39, 0.14)',
+                          cursor: 'pointer',
                         }}
                       >
-                        {event.photo_count} photo{event.photo_count === 1 ? '' : 's'}
-                      </span>
-                    </button>
-                  ))}
+                        <span
+                          style={{
+                            fontSize: '1.65rem',
+                            lineHeight: 1.05,
+                            fontWeight: 900,
+                            letterSpacing: '-0.05em',
+                            textShadow: coverUrl ? '0 2px 14px rgba(0,0,0,0.45)' : 'none',
+                            color: coverUrl ? '#ffffff' : '#111827',
+                          }}
+                        >
+                          {event.name}
+                        </span>
+
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '9px 15px',
+                            borderRadius: '999px',
+                            background: coverUrl ? '#ffffff' : '#111827',
+                            color: coverUrl ? '#111827' : '#ffffff',
+                            fontSize: '0.95rem',
+                            fontWeight: 900,
+                          }}
+                        >
+                          {event.photo_count} photo{event.photo_count === 1 ? '' : 's'}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
               </section>
             )
@@ -998,6 +1074,7 @@ function App() {
 
   const cartTotal = getCartTotal()
   const isStudioView = view === 'studio'
+  const showTopHeader = isStudioView
   const smallHeadingStyle = {
     fontSize: '0.8rem',
     lineHeight: '1.1',
@@ -1007,104 +1084,95 @@ function App() {
   return (
     <main className="deck-page">
       <section className="deck-shell">
-        <header className="deck-header">
-          <button
-            className="brand-button"
-            type="button"
-            onClick={() => {
-              if (isStudioView) {
-                setView('studio')
-              }
-            }}
-            aria-label="FOTODECK"
-          >
-            FOTODECK
-          </button>
+        {showTopHeader && (
+          <header className="deck-header">
+            <button
+              className="brand-button"
+              type="button"
+              onClick={() => {
+                if (isStudioView) {
+                  setView('studio')
+                }
+              }}
+              aria-label="FOTODECK"
+            >
+              FOTODECK
+            </button>
 
-          {view === 'landing' && (
+            {isStudioView && (
+              <nav className="deck-nav" aria-label="View selector">
+                <button type="button" onClick={() => setView('studio')}>
+                  Studio
+                </button>
+                <button type="button" onClick={handleOpenCustomerView}>
+                  Open customer view
+                </button>
+                <button type="button" onClick={() => handleLoadSavedPhotos()}>
+                  Load current event
+                </button>
+                <button type="button" onClick={handleReset}>
+                  Reset
+                </button>
+              </nav>
+            )}
+          </header>
+        )}
+
+        {view === 'landing' && (
+          <section
+            style={{
+              minHeight: '100vh',
+              display: 'grid',
+              placeItems: 'center',
+              padding: '28px 20px',
+              background:
+                'linear-gradient(90deg, rgba(5,10,20,0.72), rgba(5,10,20,0.34), rgba(5,10,20,0.1)), url("/fotodeck-landing.jpg") center/cover no-repeat',
+            }}
+          >
             <button
               type="button"
               onClick={handleSecretAdminOpen}
               aria-label="Admin access"
               title=""
               style={{
+                position: 'fixed',
+                top: '18px',
+                right: '18px',
                 width: '9px',
                 height: '9px',
                 padding: 0,
                 border: 0,
                 borderRadius: '999px',
-                background: 'rgba(34, 34, 34, 0.22)',
+                background: 'rgba(255, 255, 255, 0.42)',
                 cursor: 'pointer',
+                zIndex: 10,
               }}
             />
-          )}
 
-          {isStudioView && (
-            <nav className="deck-nav" aria-label="View selector">
-              <button type="button" onClick={() => setView('studio')}>
-                Studio
-              </button>
-              <button type="button" onClick={handleOpenCustomerView}>
-                Open customer view
-              </button>
-              <button type="button" onClick={() => handleLoadSavedPhotos()}>
-                Load current event
-              </button>
-              <button type="button" onClick={handleReset}>
-                Reset
-              </button>
-            </nav>
-          )}
-
-          {view !== 'studio' && view !== 'landing' && (
-            <button
-              type="button"
-              onClick={handleAdminReturn}
-              aria-label="Admin return"
-              title=""
-              style={{
-                width: '9px',
-                height: '9px',
-                padding: 0,
-                border: 0,
-                borderRadius: '999px',
-                background: 'rgba(34, 34, 34, 0.22)',
-                cursor: 'pointer',
-              }}
-            />
-          )}
-        </header>
-
-        {view === 'landing' && (
-          <section
-            style={{
-              minHeight: '72vh',
-              display: 'grid',
-              placeItems: 'center',
-              padding: '34px 20px',
-            }}
-          >
             <section
               style={{
                 width: '100%',
-                maxWidth: '720px',
+                maxWidth: '560px',
+                justifySelf: 'start',
+                marginLeft: 'min(7vw, 84px)',
                 display: 'grid',
-                gap: '28px',
-                textAlign: 'center',
-                padding: '40px 30px',
+                gap: '24px',
+                textAlign: 'left',
+                padding: '34px',
                 borderRadius: '34px',
-                background: '#ffffff',
-                boxShadow: '0 20px 55px rgba(17, 24, 39, 0.1)',
+                background: 'rgba(255, 255, 255, 0.86)',
+                boxShadow: '0 28px 80px rgba(0, 0, 0, 0.26)',
+                backdropFilter: 'blur(12px)',
               }}
             >
               <div>
                 <h1
                   style={{
                     margin: 0,
-                    fontSize: '3rem',
-                    lineHeight: 1,
+                    fontSize: '3.4rem',
+                    lineHeight: 0.95,
                     letterSpacing: '-0.08em',
-                    color: '#111827',
+                    color: '#07111f',
                   }}
                 >
                   FOTODECK
@@ -1112,8 +1180,9 @@ function App() {
                 <p
                   style={{
                     margin: '12px 0 0',
-                    fontSize: '1.1rem',
-                    color: '#374151',
+                    fontSize: '1.15rem',
+                    color: '#1f2937',
+                    fontWeight: 700,
                   }}
                 >
                   Enter your details to view photos.
@@ -1124,11 +1193,10 @@ function App() {
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
                     gap: '12px',
                   }}
                 >
-                  <label style={{ display: 'grid', gap: '7px', textAlign: 'left', fontWeight: 700 }}>
+                  <label style={{ display: 'grid', gap: '7px', textAlign: 'left', fontWeight: 800, color: '#111827' }}>
                     Name
                     <input
                       type="text"
@@ -1138,7 +1206,7 @@ function App() {
                     />
                   </label>
 
-                  <label style={{ display: 'grid', gap: '7px', textAlign: 'left', fontWeight: 700 }}>
+                  <label style={{ display: 'grid', gap: '7px', textAlign: 'left', fontWeight: 800, color: '#111827' }}>
                     Email
                     <input
                       type="email"
@@ -1148,7 +1216,7 @@ function App() {
                     />
                   </label>
 
-                  <label style={{ display: 'grid', gap: '7px', textAlign: 'left', fontWeight: 700 }}>
+                  <label style={{ display: 'grid', gap: '7px', textAlign: 'left', fontWeight: 800, color: '#111827' }}>
                     Phone
                     <input
                       type="tel"
@@ -1167,7 +1235,7 @@ function App() {
               </form>
 
               {signupStatus && (
-                <strong style={{ color: '#374151' }}>
+                <strong style={{ color: '#111827' }}>
                   {signupStatus}
                 </strong>
               )}
@@ -1423,6 +1491,26 @@ function App() {
 
         {view === 'photo-grid' && (
           <section className="collection-view">
+            <button
+              type="button"
+              onClick={handleAdminReturn}
+              aria-label="Admin return"
+              title=""
+              style={{
+                position: 'fixed',
+                top: '18px',
+                right: '18px',
+                width: '9px',
+                height: '9px',
+                padding: 0,
+                border: 0,
+                borderRadius: '999px',
+                background: 'rgba(34, 34, 34, 0.22)',
+                cursor: 'pointer',
+                zIndex: 10,
+              }}
+            />
+
             <div className="collection-heading">
               <div>
                 <p className="soft-label">
