@@ -911,10 +911,12 @@ function App() {
     return (
       <section
         style={{
-          width: '100%',
-          maxWidth: '1120px',
-          margin: '0 auto',
-          padding: '34px 20px 70px',
+          width: '100vw',
+          maxWidth: '100vw',
+          marginLeft: 'calc(50% - 50vw)',
+          marginRight: 'calc(50% - 50vw)',
+          padding: '30px 18px 70px',
+          boxSizing: 'border-box',
         }}
       >
         <button
@@ -939,15 +941,18 @@ function App() {
 
         <div
           style={{
-            display: 'grid',
-            gap: '10px',
-            textAlign: 'center',
-            margin: '0 auto 34px',
             width: '100%',
+            display: 'grid',
+            justifyItems: 'center',
+            alignItems: 'center',
+            gap: '8px',
+            textAlign: 'center',
+            margin: '0 auto 30px',
           }}
         >
           <h1
             style={{
+              width: '100%',
               margin: 0,
               fontSize: '3rem',
               lineHeight: 1,
@@ -961,6 +966,7 @@ function App() {
 
           <p
             style={{
+              width: '100%',
               margin: 0,
               fontSize: '1.25rem',
               color: '#374151',
@@ -971,137 +977,146 @@ function App() {
           </p>
         </div>
 
-        {savedStatus && (
-          <div
-            style={{
-              padding: '18px 20px',
-              borderRadius: '22px',
-              background: '#ffffff',
-              color: '#374151',
-              marginBottom: '20px',
-              boxShadow: '0 12px 30px rgba(17, 24, 39, 0.08)',
-              textAlign: 'center',
-            }}
-          >
-            {savedStatus}
-          </div>
-        )}
-
-        {!savedStatus && visibleCollections.length === 0 && (
-          <div
-            style={{
-              padding: '28px',
-              borderRadius: '28px',
-              background: '#ffffff',
-              color: '#374151',
-              boxShadow: '0 12px 30px rgba(17, 24, 39, 0.08)',
-              textAlign: 'center',
-            }}
-          >
-            No photo events are available yet.
-          </div>
-        )}
-
         <div
           style={{
-            display: 'grid',
-            gap: '36px',
+            width: '100%',
+            maxWidth: '1120px',
+            margin: '0 auto',
           }}
         >
-          {visibleCollections.map((collection) => {
-            const collectionEvents = savedEvents.filter((event) => event.collection_id === collection.id)
+          {savedStatus && (
+            <div
+              style={{
+                padding: '14px 18px',
+                borderRadius: '18px',
+                background: '#ffffff',
+                color: '#374151',
+                marginBottom: '18px',
+                boxShadow: '0 10px 24px rgba(17, 24, 39, 0.08)',
+                textAlign: 'center',
+              }}
+            >
+              {savedStatus}
+            </div>
+          )}
 
-            return (
-              <section
-                key={collection.id}
-                style={{
-                  display: 'grid',
-                  gap: '16px',
-                }}
-              >
-                <h2
-                  style={{
-                    margin: 0,
-                    fontSize: '1.25rem',
-                    color: '#111827',
-                    letterSpacing: '-0.03em',
-                    textAlign: 'center',
-                  }}
-                >
-                  {collection.name}
-                </h2>
+          {!savedStatus && visibleCollections.length === 0 && (
+            <div
+              style={{
+                padding: '24px',
+                borderRadius: '24px',
+                background: '#ffffff',
+                color: '#374151',
+                boxShadow: '0 10px 24px rgba(17, 24, 39, 0.08)',
+                textAlign: 'center',
+              }}
+            >
+              No photo events are available yet.
+            </div>
+          )}
 
-                <div
+          <div
+            style={{
+              display: 'grid',
+              gap: '30px',
+            }}
+          >
+            {visibleCollections.map((collection) => {
+              const collectionEvents = savedEvents.filter((event) => event.collection_id === collection.id)
+
+              return (
+                <section
+                  key={collection.id}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-                    gap: '18px',
+                    gap: '14px',
                   }}
                 >
-                  {collectionEvents.map((event) => {
-                    const coverUrl = eventCoverUrls[event.id] || ''
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontSize: '1.15rem',
+                      color: '#111827',
+                      letterSpacing: '-0.03em',
+                      textAlign: 'center',
+                    }}
+                  >
+                    {collection.name}
+                  </h2>
 
-                    return (
-                      <button
-                        key={event.id}
-                        type="button"
-                        onClick={() => handleOpenPublicEvent(collection, event)}
-                        style={{
-                          minHeight: '240px',
-                          position: 'relative',
-                          overflow: 'hidden',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          justifyContent: 'flex-end',
-                          alignItems: 'flex-start',
-                          gap: '14px',
-                          textAlign: 'left',
-                          padding: '24px',
-                          border: '1px solid rgba(17, 24, 39, 0.08)',
-                          borderRadius: '30px',
-                          background: coverUrl
-                            ? `linear-gradient(180deg, rgba(17,24,39,0.05), rgba(17,24,39,0.78)), url("${coverUrl}") center/cover`
-                            : 'linear-gradient(135deg, #ffffff, #d1d5db)',
-                          color: '#ffffff',
-                          boxShadow: '0 18px 42px rgba(17, 24, 39, 0.14)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <span
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(132px, 1fr))',
+                      gap: '12px',
+                    }}
+                  >
+                    {collectionEvents.map((event) => {
+                      const coverUrl = eventCoverUrls[event.id] || ''
+
+                      return (
+                        <button
+                          key={event.id}
+                          type="button"
+                          onClick={() => handleOpenPublicEvent(collection, event)}
                           style={{
-                            fontSize: '1.65rem',
-                            lineHeight: 1.05,
-                            fontWeight: 900,
-                            letterSpacing: '-0.05em',
-                            textShadow: coverUrl ? '0 2px 14px rgba(0,0,0,0.45)' : 'none',
-                            color: coverUrl ? '#ffffff' : '#111827',
+                            aspectRatio: '1 / 1',
+                            minHeight: 0,
+                            position: 'relative',
+                            overflow: 'hidden',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'flex-end',
+                            alignItems: 'flex-start',
+                            gap: '8px',
+                            textAlign: 'left',
+                            padding: '12px',
+                            border: '1px solid rgba(17, 24, 39, 0.08)',
+                            borderRadius: '20px',
+                            background: coverUrl
+                              ? `linear-gradient(180deg, rgba(17,24,39,0.02), rgba(17,24,39,0.78)), url("${coverUrl}") center/cover`
+                              : 'linear-gradient(135deg, #ffffff, #d1d5db)',
+                            color: '#ffffff',
+                            boxShadow: '0 10px 24px rgba(17, 24, 39, 0.12)',
+                            cursor: 'pointer',
                           }}
                         >
-                          {event.name}
-                        </span>
+                          <span
+                            style={{
+                              fontSize: '0.98rem',
+                              lineHeight: 1.02,
+                              fontWeight: 900,
+                              letterSpacing: '-0.04em',
+                              textShadow: coverUrl ? '0 2px 10px rgba(0,0,0,0.5)' : 'none',
+                              color: coverUrl ? '#ffffff' : '#111827',
+                            }}
+                          >
+                            {event.name}
+                          </span>
 
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: '9px 15px',
-                            borderRadius: '999px',
-                            background: coverUrl ? '#ffffff' : '#111827',
-                            color: coverUrl ? '#111827' : '#ffffff',
-                            fontSize: '0.95rem',
-                            fontWeight: 900,
-                          }}
-                        >
-                          {event.photo_count} photo{event.photo_count === 1 ? '' : 's'}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </section>
-            )
-          })}
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: '6px 9px',
+                              borderRadius: '999px',
+                              background: coverUrl ? '#ffffff' : '#111827',
+                              color: coverUrl ? '#111827' : '#ffffff',
+                              fontSize: '0.76rem',
+                              fontWeight: 900,
+                            }}
+                          >
+                            {event.photo_count} photo{event.photo_count === 1 ? '' : 's'}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </section>
+              )
+            })}
+          </div>
         </div>
       </section>
     )
