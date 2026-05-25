@@ -1,8 +1,6 @@
 ﻿import { useEffect, useRef, useState } from 'react'
 import './App.css'
 
-const STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/dRm3cu89c0EKaWfcbhbEA06'
-
 function makeSafeId(value, fallback) {
   const text = value ? String(value).trim().toLowerCase() : ''
 
@@ -118,6 +116,16 @@ function App() {
       const params = new URLSearchParams(window.location.search)
       const collectionId = params.get('collectionId')
       const eventId = params.get('eventId')
+      const stripeStatus = params.get('stripe')
+      const stripeSessionId = params.get('session_id')
+
+      if (stripeStatus === 'success' && stripeSessionId) {
+        setCartStatus('Payment complete. Preparing download access.')
+      }
+
+      if (stripeStatus === 'cancel') {
+        setCartStatus('Payment cancelled. Your selected photos were not purchased.')
+      }
 
       if (!collectionId || !eventId) {
         setView('public-collections')
@@ -236,8 +244,8 @@ function App() {
   function handleScrollToCheckout() {
     setCartStatus(
       cartItems.length === 0
-        ? 'Select photos first, then pay.'
-        : 'Check your selected photo numbers before opening Stripe.'
+        ? 'Select photos first, then checkout.'
+        : 'Check your selected photos and enter email below.'
     )
 
     window.setTimeout(() => {
@@ -304,15 +312,47 @@ function App() {
     }
   }
 
-  function handleCartCheckout() {
+  async function handleCartCheckout() {
     if (cartItems.length === 0) {
-      setCartStatus('Select at least one photo before paying')
+      setCartStatus('Add at least one photo before checkout')
+      return
+    }
+
+    if (!buyerEmail || !buyerEmail.includes('@')) {
+      setCartStatus('Enter buyer email before checkout')
       return
     }
 
     setIsCheckingOut(true)
-    setCartStatus('Opening Stripe payment page. Enter the selected photo number(s) when paying.')
-    window.location.href = STRIPE_PAYMENT_LINK
+    setCartStatus('Opening secure card checkout...')
+
+    try {
+      const response = await fetch('/api/stripe-create-checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          collectionId: getCurrentCollectionId(),
+          eventId: getCurrentEventId(),
+          buyerEmail,
+          imageIds: cartItems.map((item) => item.id),
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok || !result.ok || !result.checkoutUrl) {
+        setCartStatus(result.error || 'Card checkout could not be opened')
+        setIsCheckingOut(false)
+        return
+      }
+
+      window.location.href = result.checkoutUrl
+    } catch (error) {
+      setCartStatus(error.message || 'Card checkout could not be opened')
+      setIsCheckingOut(false)
+    }
   }
 
   async function handleUpdateSelectedEventPrice() {
@@ -1518,44 +1558,6 @@ function App() {
               </div>
             </div>
 
-            <section
-              className="studio-preview"
-              style={{
-                marginBottom: '18px',
-                background: '#fffdf5',
-                border: '1px solid rgba(17, 24, 39, 0.1)',
-              }}
-            >
-              <div className="preview-heading">
-                <div>
-                  <p className="soft-label">
-                    Buy photos
-                  </p>
-                  <h1 style={smallHeadingStyle}>
-                    Select photo(s), then pay by card
-                  </h1>
-                </div>
-
-                <button className="dark-action" type="button" onClick={handleScrollToCheckout}>
-                  Pay for Photos
-                </button>
-              </div>
-
-              <div className="empty-photo-space" style={{ textAlign: 'left', alignItems: 'flex-start' }}>
-                <strong>How to order</strong>
-                <br />
-                <span>1. Select the photo(s) you want.</span>
-                <br />
-                <span>2. Check the selected photo number(s) in the checkout box.</span>
-                <br />
-                <span>3. Click Pay for Photos.</span>
-                <br />
-                <span>4. Enter the actual photo number(s) on the Stripe payment page.</span>
-                <br />
-                <span>5. Purchased images will be sent manually to the email used for payment.</span>
-              </div>
-            </section>
-
             <section className="studio-preview" style={{ marginBottom: '18px' }}>
               <div className="preview-heading" style={{ marginBottom: 0 }}>
                 <div>
@@ -1564,7 +1566,7 @@ function App() {
                   </p>
                   <h1 style={smallHeadingStyle}>
                     {cartItems.length === 0
-                      ? 'No photos selected'
+                      ? 'Select photos to begin'
                       : `${cartItems.length} photo${cartItems.length === 1 ? '' : 's'} selected / NZ$${cartTotal.toFixed(2)}`}
                   </h1>
                 </div>
@@ -1575,7 +1577,7 @@ function App() {
                   </button>
 
                   <button className="dark-action" type="button" onClick={handleScrollToCheckout} disabled={isCheckingOut}>
-                    Pay for Photos
+                    Checkout
                   </button>
                 </div>
               </div>
@@ -1606,7 +1608,7 @@ function App() {
                         </button>
 
                         <div className="buy-row">
-                          <span>Photo number: {photo.name}</span>
+                          <span>{photo.name}</span>
                           <button
                             type="button"
                             onClick={() => {
@@ -1652,16 +1654,25 @@ function App() {
                 </div>
 
                 <button className="dark-action" type="button" onClick={handleCartCheckout} disabled={isCheckingOut}>
-                  {isCheckingOut ? 'Opening Stripe...' : 'Pay by Card'}
+                  {isCheckingOut ? 'Opening Checkout...' : 'Pay by Card'}
                 </button>
               </div>
 
-              <div className="empty-photo-space" style={{ marginTop: '12px', textAlign: 'left', alignItems: 'flex-start' }}>
+              <div className="studio-fields">
+                <label>
+                  Email for delivery
+                  <input
+                    type="email"
+                    value={buyerEmail}
+                    placeholder="buyer@example.com"
+                    onChange={(event) => setBuyerEmail(event.target.value)}
+                    disabled={isCheckingOut}
+                  />
+                </label>
+              </div>
+
+              <div className="empty-photo-space" style={{ marginTop: '12px' }}>
                 <strong>{cartStatus}</strong>
-                <br />
-                <span>
-                  When Stripe opens, enter the selected photo number(s) shown below.
-                </span>
 
                 {cartItems.length > 0 && (
                   <div style={{ width: '100%', display: 'grid', gap: '8px', marginTop: '12px' }}>
@@ -1674,7 +1685,7 @@ function App() {
                           borderRadius: '999px',
                         }}
                       >
-                        <span>Photo number: {item.name}</span>
+                        <span>{item.name}</span>
                         <button type="button" onClick={() => handleRemoveFromCart(item)} disabled={isCheckingOut}>
                           Remove
                         </button>
@@ -1691,10 +1702,6 @@ function App() {
                     </button>
                   </>
                 )}
-
-                <div style={{ width: '100%', marginTop: '14px', color: '#374151' }}>
-                  Purchased images will be sent manually to the email used for payment.
-                </div>
               </div>
             </section>
           </section>
@@ -1725,8 +1732,6 @@ function App() {
 
               <div className="lightbox-bottom">
                 <p>
-                  Photo number: {selectedPhoto.name}
-                  <br />
                   NZ${getPhotoPrice(selectedPhoto).toFixed(2)}
                 </p>
 
