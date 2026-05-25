@@ -25,8 +25,8 @@ function centsFromPrice(value) {
   return Math.round(number * 100);
 }
 
-function getPaypalBaseUrl(env) {
-  const paypalEnv = String(env.PAYPAL_ENV || "sandbox").trim().toLowerCase();
+function getPaypalBaseUrl(env) {const paypalEnv = String(env.PAYPAL_ENV || "live").trim().toLowerCase();
+  
 
   if (paypalEnv === "live") {
     return "https://api-m.paypal.com";
