@@ -58,6 +58,16 @@ function sortPhotosFirstFirst(photosToSort) {
   )
 }
 
+function priceFromCents(priceCents) {
+  const cents = Number(priceCents || 0)
+
+  if (!Number.isFinite(cents) || cents <= 0) {
+    return ''
+  }
+
+  return (cents / 100).toFixed(2).replace(/\.00$/, '')
+}
+
 function App() {
   const [view, setView] = useState('studio')
   const [collectionName, setCollectionName] = useState('FOTODECK')
@@ -82,6 +92,8 @@ function App() {
   const [buyerEmail, setBuyerEmail] = useState('')
   const [cartStatus, setCartStatus] = useState('Cart is empty')
   const [isCheckingOut, setIsCheckingOut] = useState(false)
+  const [priceStatus, setPriceStatus] = useState('No price edit yet')
+  const [isUpdatingPrice, setIsUpdatingPrice] = useState(false)
 
   useEffect(() => {
     async function captureReturnedPaypalOrder(localOrderId) {
@@ -138,6 +150,7 @@ function App() {
     setBuyerEmail('')
     setCartStatus('Cart is empty')
     setIsCheckingOut(false)
+    setPriceStatus('No price edit yet')
   }
 
   function mapSavedPhotoToPhoto(photo) {
@@ -253,6 +266,66 @@ function App() {
     }
   }
 
+  async function handleUpdateSelectedEventPrice() {
+    const collectionId = getCurrentCollectionId()
+    const eventId = getCurrentEventId()
+    const price = Number(singlePhotoPrice)
+
+    if (!activeCollectionId || !activeEventId) {
+      setPriceStatus('Select a saved event before editing price')
+      return
+    }
+
+    if (!Number.isFinite(price) || price < 0) {
+      setPriceStatus('Enter a valid photo price')
+      return
+    }
+
+    setIsUpdatingPrice(true)
+    setPriceStatus(`Saving price NZ$${price.toFixed(2)}...`)
+
+    try {
+      const response = await fetch('/api/update-event-price', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          collectionId,
+          eventId,
+          price,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok || !result.ok) {
+        setPriceStatus(result.error || 'Price could not be updated')
+        setIsUpdatingPrice(false)
+        return
+      }
+
+      const updatedPriceCents = result.updated?.price_cents || Math.round(price * 100)
+
+      setPhotos((currentPhotos) =>
+        currentPhotos.map((photo) => ({
+          ...photo,
+          priceCents: updatedPriceCents,
+        }))
+      )
+
+      setCartItems([])
+      setCartStatus('Cart cleared after price change')
+      setPriceStatus(`Saved ${eventName || 'Event'} price at NZ$${price.toFixed(2)}`)
+      setIsUpdatingPrice(false)
+
+      await handleLoadSavedPhotos(collectionId, eventId)
+    } catch (error) {
+      setPriceStatus(error.message || 'Price could not be updated')
+      setIsUpdatingPrice(false)
+    }
+  }
+
   async function handlePhotoSelection(event) {
     const files = Array.from(event.target.files || [])
 
@@ -361,8 +434,14 @@ function App() {
       }
 
       const savedPhotos = sortPhotosFirstFirst(result.images.map(mapSavedPhotoToPhoto))
+      const savedPrice = priceFromCents(savedPhotos[0]?.priceCents)
 
       setPhotos(savedPhotos)
+
+      if (savedPrice) {
+        setSinglePhotoPrice(savedPrice)
+      }
+
       setCartItems([])
       setCartStatus('Cart is empty')
       setLoadStatus(`Loaded ${savedPhotos.length} saved photo${savedPhotos.length === 1 ? '' : 's'} for this event`)
@@ -403,6 +482,7 @@ function App() {
     setCartItems([])
     setBuyerEmail('')
     setCartStatus('Cart is empty')
+    setPriceStatus(`Selected ${event.name || 'Event'} for price editing`)
     setSavedStatus(`Selected ${collection.name || 'Collection'} / ${event.name || 'Event'}`)
     await handleLoadSavedPhotos(collection.id, event.id)
   }
@@ -563,6 +643,8 @@ function App() {
     setBuyerEmail('')
     setCartStatus('Cart is empty')
     setIsCheckingOut(false)
+    setPriceStatus('No price edit yet')
+    setIsUpdatingPrice(false)
   }
 
   function handleAdminReturn() {
@@ -696,7 +778,7 @@ function App() {
                     min="0"
                     value={singlePhotoPrice}
                     onChange={(event) => setSinglePhotoPrice(event.target.value)}
-                    disabled={isUploading}
+                    disabled={isUploading || isUpdatingPrice}
                   />
                 </label>
 
@@ -729,6 +811,19 @@ function App() {
                 <button className="photo-loader-button" type="button" onClick={() => handleLoadSavedPhotos()} disabled={isUploading}>
                   Load current event
                 </button>
+
+                <button
+                  className="photo-loader-button"
+                  type="button"
+                  onClick={handleUpdateSelectedEventPrice}
+                  disabled={isUploading || isUpdatingPrice || !activeCollectionId || !activeEventId}
+                >
+                  {isUpdatingPrice ? 'Saving price...' : 'Save selected event price'}
+                </button>
+              </div>
+
+              <div className="empty-photo-space">
+                <strong>{priceStatus}</strong>
               </div>
             </section>
 
