@@ -19,20 +19,6 @@ function makeDisplayPhotoUrl(displayKey) {
   return `/api/display-image?key=${encodeURIComponent(displayKey)}`
 }
 
-function formatUploadedTime(value) {
-  if (!value) {
-    return 'Upload time not available'
-  }
-
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return String(value)
-  }
-
-  return date.toLocaleString()
-}
-
 function getUploadedTime(photo) {
   return (
     photo.uploaded_at ||
@@ -106,7 +92,7 @@ function App() {
   const [isUploading, setIsUploading] = useState(false)
   const [savedCollections, setSavedCollections] = useState([])
   const [savedEvents, setSavedEvents] = useState([])
-  const [savedStatus, setSavedStatus] = useState('Saved collections not loaded yet')
+  const [savedStatus, setSavedStatus] = useState('')
   const [deleteStatus, setDeleteStatus] = useState('No delete action yet')
   const [deletingPhotoId, setDeletingPhotoId] = useState('')
   const [deletingEventId, setDeletingEventId] = useState('')
@@ -311,8 +297,7 @@ function App() {
     }
 
     window.localStorage.setItem('fotodeck_visitor', JSON.stringify(signup))
-
-    setSignupStatus('Details saved. Opening Collections...')
+    setSignupStatus('Opening Collections...')
     setView('public-collections')
     window.history.pushState({}, document.title, '/view')
     await handleLoadSavedCollectionsEvents()
@@ -517,7 +502,7 @@ function App() {
   }
 
   async function handleLoadPublicEvent(collectionId, eventId) {
-    setLoadStatus('Loading public event...')
+    setLoadStatus('Loading photos...')
 
     try {
       const response = await fetch(
@@ -529,7 +514,7 @@ function App() {
         setPhotos([])
         setCartItems([])
         setCartStatus('Cart is empty')
-        setLoadStatus(result.error || 'No photos found for this public link')
+        setLoadStatus(result.error || 'No photos found')
         return
       }
 
@@ -552,7 +537,7 @@ function App() {
       setCartStatus('Cart is empty')
       setLoadStatus(`Loaded ${savedPhotos.length} photo${savedPhotos.length === 1 ? '' : 's'}`)
     } catch (error) {
-      setLoadStatus(error.message || 'Public event could not be loaded')
+      setLoadStatus(error.message || 'Photos could not be loaded')
     }
   }
 
@@ -594,24 +579,26 @@ function App() {
   }
 
   async function handleLoadSavedCollectionsEvents() {
-    setSavedStatus('Loading saved collections and events...')
+    setSavedStatus('Loading...')
 
     try {
       const response = await fetch('/api/collections-events')
       const result = await response.json()
 
       if (!response.ok || !result.ok) {
-        setSavedStatus(result.error || 'Saved collections could not be loaded')
+        setSavedCollections([])
+        setSavedEvents([])
+        setSavedStatus(result.error || 'Photos could not be loaded')
         return
       }
 
       setSavedCollections(result.collections || [])
       setSavedEvents(result.events || [])
-      setSavedStatus(
-        `Loaded ${result.collectionCount || 0} collection${result.collectionCount === 1 ? '' : 's'} and ${result.eventCount || 0} event${result.eventCount === 1 ? '' : 's'}`
-      )
+      setSavedStatus('')
     } catch (error) {
-      setSavedStatus(error.message || 'Saved collections could not be loaded')
+      setSavedCollections([])
+      setSavedEvents([])
+      setSavedStatus(error.message || 'Photos could not be loaded')
     }
   }
 
@@ -641,11 +628,13 @@ function App() {
     setBuyerEmail('')
     setCartStatus('Cart is empty')
     setView('photo-grid')
+
     window.history.pushState(
       {},
       document.title,
       `/view?collectionId=${encodeURIComponent(collection.id)}&eventId=${encodeURIComponent(event.id)}`
     )
+
     await handleLoadPublicEvent(collection.id, event.id)
   }
 
@@ -840,6 +829,173 @@ function App() {
     )
   }
 
+  function renderPublicCollections() {
+    const visibleCollections = savedCollections.filter((collection) =>
+      savedEvents.some((event) => event.collection_id === collection.id)
+    )
+
+    return (
+      <section
+        style={{
+          width: '100%',
+          maxWidth: '1080px',
+          margin: '0 auto',
+          padding: '42px 22px 70px',
+        }}
+      >
+        <div
+          style={{
+            display: 'grid',
+            gap: '10px',
+            marginBottom: '34px',
+          }}
+        >
+          <h1
+            style={{
+              margin: 0,
+              fontSize: '2.6rem',
+              lineHeight: 1,
+              letterSpacing: '-0.07em',
+              color: '#111827',
+            }}
+          >
+            FOTODECK
+          </h1>
+
+          <p
+            style={{
+              margin: 0,
+              fontSize: '1.2rem',
+              color: '#374151',
+            }}
+          >
+            Choose your photos
+          </p>
+        </div>
+
+        {savedStatus && (
+          <div
+            style={{
+              padding: '18px 20px',
+              borderRadius: '22px',
+              background: '#ffffff',
+              color: '#374151',
+              marginBottom: '20px',
+              boxShadow: '0 12px 30px rgba(17, 24, 39, 0.08)',
+            }}
+          >
+            {savedStatus}
+          </div>
+        )}
+
+        {!savedStatus && visibleCollections.length === 0 && (
+          <div
+            style={{
+              padding: '28px',
+              borderRadius: '28px',
+              background: '#ffffff',
+              color: '#374151',
+              boxShadow: '0 12px 30px rgba(17, 24, 39, 0.08)',
+            }}
+          >
+            No photo collections are available yet.
+          </div>
+        )}
+
+        <div
+          style={{
+            display: 'grid',
+            gap: '24px',
+          }}
+        >
+          {visibleCollections.map((collection) => {
+            const collectionEvents = savedEvents.filter((event) => event.collection_id === collection.id)
+
+            return (
+              <section
+                key={collection.id}
+                style={{
+                  display: 'grid',
+                  gap: '14px',
+                }}
+              >
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: '1.15rem',
+                    color: '#111827',
+                    letterSpacing: '-0.03em',
+                  }}
+                >
+                  {collection.name}
+                </h2>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+                    gap: '16px',
+                  }}
+                >
+                  {collectionEvents.map((event) => (
+                    <button
+                      key={event.id}
+                      type="button"
+                      onClick={() => handleOpenPublicEvent(collection, event)}
+                      style={{
+                        minHeight: '160px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        gap: '18px',
+                        textAlign: 'left',
+                        padding: '22px',
+                        border: '1px solid rgba(17, 24, 39, 0.08)',
+                        borderRadius: '28px',
+                        background: '#ffffff',
+                        color: '#111827',
+                        boxShadow: '0 16px 36px rgba(17, 24, 39, 0.09)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: '1.35rem',
+                          lineHeight: 1.08,
+                          fontWeight: 800,
+                          letterSpacing: '-0.04em',
+                        }}
+                      >
+                        {event.name}
+                      </span>
+
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '9px 14px',
+                          borderRadius: '999px',
+                          background: '#111827',
+                          color: '#ffffff',
+                          fontSize: '0.95rem',
+                          fontWeight: 800,
+                        }}
+                      >
+                        {event.photo_count} photo{event.photo_count === 1 ? '' : 's'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )
+          })}
+        </div>
+      </section>
+    )
+  }
+
   const cartTotal = getCartTotal()
   const isStudioView = view === 'studio'
   const smallHeadingStyle = {
@@ -920,25 +1076,59 @@ function App() {
         </header>
 
         {view === 'landing' && (
-          <section className="collection-view">
-            <section className="studio-panel" style={{ textAlign: 'center' }}>
-              <div className="preview-heading" style={{ justifyContent: 'center' }}>
-                <div>
-                  <h1 style={{ fontSize: '1.45rem', lineHeight: '1.1', letterSpacing: '-0.03em' }}>
-                    FOTODECK
-                  </h1>
-                </div>
+          <section
+            style={{
+              minHeight: '72vh',
+              display: 'grid',
+              placeItems: 'center',
+              padding: '34px 20px',
+            }}
+          >
+            <section
+              style={{
+                width: '100%',
+                maxWidth: '720px',
+                display: 'grid',
+                gap: '28px',
+                textAlign: 'center',
+                padding: '40px 30px',
+                borderRadius: '34px',
+                background: '#ffffff',
+                boxShadow: '0 20px 55px rgba(17, 24, 39, 0.1)',
+              }}
+            >
+              <div>
+                <h1
+                  style={{
+                    margin: 0,
+                    fontSize: '3rem',
+                    lineHeight: 1,
+                    letterSpacing: '-0.08em',
+                    color: '#111827',
+                  }}
+                >
+                  FOTODECK
+                </h1>
+                <p
+                  style={{
+                    margin: '12px 0 0',
+                    fontSize: '1.1rem',
+                    color: '#374151',
+                  }}
+                >
+                  Enter your details to view photos.
+                </p>
               </div>
 
               <form onSubmit={handleLandingSignup}>
                 <div
-                  className="studio-fields"
                   style={{
+                    display: 'grid',
                     gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-                    alignItems: 'end',
+                    gap: '12px',
                   }}
                 >
-                  <label>
+                  <label style={{ display: 'grid', gap: '7px', textAlign: 'left', fontWeight: 700 }}>
                     Name
                     <input
                       type="text"
@@ -948,7 +1138,7 @@ function App() {
                     />
                   </label>
 
-                  <label>
+                  <label style={{ display: 'grid', gap: '7px', textAlign: 'left', fontWeight: 700 }}>
                     Email
                     <input
                       type="email"
@@ -958,7 +1148,7 @@ function App() {
                     />
                   </label>
 
-                  <label>
+                  <label style={{ display: 'grid', gap: '7px', textAlign: 'left', fontWeight: 700 }}>
                     Phone
                     <input
                       type="tel"
@@ -969,7 +1159,7 @@ function App() {
                   </label>
                 </div>
 
-                <div className="photo-loader" style={{ marginTop: '16px', justifyContent: 'center' }}>
+                <div style={{ marginTop: '20px' }}>
                   <button className="dark-action" type="submit">
                     Start FOTODECK
                   </button>
@@ -977,9 +1167,9 @@ function App() {
               </form>
 
               {signupStatus && (
-                <div className="empty-photo-space">
-                  <strong>{signupStatus}</strong>
-                </div>
+                <strong style={{ color: '#374151' }}>
+                  {signupStatus}
+                </strong>
               )}
             </section>
           </section>
@@ -1098,7 +1288,7 @@ function App() {
               </div>
 
               <div className="empty-photo-space">
-                <strong>{savedStatus}</strong>
+                <strong>{savedStatus || 'Saved collections not loaded yet'}</strong>
               </div>
 
               {savedCollections.length > 0 && (
@@ -1229,89 +1419,7 @@ function App() {
           </section>
         )}
 
-        {view === 'public-collections' && (
-          <section className="collection-view">
-            <div className="collection-heading">
-              <div>
-                <p className="soft-label">Collections</p>
-              </div>
-            </div>
-
-            <section className="studio-preview" style={{ marginBottom: '18px' }}>
-              <div className="preview-heading">
-                <div>
-                  <p className="soft-label">
-                    Saved
-                  </p>
-                  <h1 style={smallHeadingStyle}>Choose a Collection / Event</h1>
-                </div>
-
-                <button className="dark-action" type="button" onClick={handleLoadSavedCollectionsEvents}>
-                  Refresh
-                </button>
-              </div>
-
-              <div className="empty-photo-space">
-                <strong>{savedStatus}</strong>
-              </div>
-            </section>
-
-            {savedCollections.length === 0 && (
-              <div className="empty-photo-space">
-                No Collections loaded yet.
-              </div>
-            )}
-
-            {savedCollections.length > 0 && (
-              <div className="studio-view">
-                {savedCollections.map((collection) => {
-                  const collectionEvents = savedEvents.filter((event) => event.collection_id === collection.id)
-
-                  return (
-                    <section className="studio-preview" key={collection.id}>
-                      <div className="preview-heading">
-                        <div>
-                          <p className="soft-label">
-                            Collection
-                          </p>
-                          <h1 style={smallHeadingStyle}>{collection.name}</h1>
-                        </div>
-
-                        <div className="price-mark">
-                          {collection.photo_count} photo{collection.photo_count === 1 ? '' : 's'}
-                        </div>
-                      </div>
-
-                      {collectionEvents.length === 0 && (
-                        <div className="empty-photo-space">
-                          No events available for this collection.
-                        </div>
-                      )}
-
-                      {collectionEvents.length > 0 && (
-                        <div className="image-mosaic">
-                          {collectionEvents.map((event) => (
-                            <article className="mosaic-card" key={event.id}>
-                              <button type="button" onClick={() => handleOpenPublicEvent(collection, event)}>
-                                <div className="empty-photo-space">
-                                  <strong>{event.name}</strong>
-                                  <br />
-                                  <span>
-                                    {event.photo_count} photo{event.photo_count === 1 ? '' : 's'}
-                                  </span>
-                                </div>
-                              </button>
-                            </article>
-                          ))}
-                        </div>
-                      )}
-                    </section>
-                  )
-                })}
-              </div>
-            )}
-          </section>
-        )}
+        {view === 'public-collections' && renderPublicCollections()}
 
         {view === 'photo-grid' && (
           <section className="collection-view">
@@ -1388,7 +1496,7 @@ function App() {
               <div className="preview-heading">
                 <div>
                   <p className="soft-label">
-                    Checkout counter
+                    Checkout
                   </p>
                   <h1 style={smallHeadingStyle}>
                     {cartItems.length} photo{cartItems.length === 1 ? '' : 's'} / NZ${cartTotal.toFixed(2)}
