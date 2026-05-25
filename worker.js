@@ -25,69 +25,32 @@ function centsFromPrice(value) {
   return Math.round(number * 100);
 }
 
-function getPaypalBaseUrl(env) {const paypalEnv = String(env.PAYPAL_ENV || "live").trim().toLowerCase();
-  
-
-  if (paypalEnv === "live") {
-    return "https://api-m.paypal.com";
-  }
-
-  return "https://api-m.sandbox.paypal.com";
-}
-
 function getRequestOrigin(request) {
   const url = new URL(request.url);
   return url.origin;
 }
 
-function makePaypalAmount(cents) {
+function makeMoneyAmount(cents) {
   return (Number(cents || 0) / 100).toFixed(2);
 }
 
-async function getPaypalAccessToken(env) {
-  if (!env.PAYPAL_CLIENT_ID || !env.PAYPAL_CLIENT_SECRET) {
-    throw new Error("PayPal credentials are missing");
-  }
-
-  const paypalBaseUrl = getPaypalBaseUrl(env);
-  const credentials = btoa(`${env.PAYPAL_CLIENT_ID}:${env.PAYPAL_CLIENT_SECRET}`);
-
-  const response = await fetch(`${paypalBaseUrl}/v1/oauth2/token`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Basic ${credentials}`,
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: "grant_type=client_credentials"
-  });
-
-  const result = await response.json();
-
-  if (!response.ok || !result.access_token) {
-    throw new Error(result.error_description || result.error || "Could not get PayPal access token");
-  }
-
-  return result.access_token;
-}
-
-async function ensurePaypalTables(env) {
+async function ensureStripeTables(env) {
   await env.DB.prepare(`
-    CREATE TABLE IF NOT EXISTS paypal_orders (
+    CREATE TABLE IF NOT EXISTS stripe_orders (
       id TEXT PRIMARY KEY,
-      paypal_order_id TEXT NOT NULL,
+      stripe_session_id TEXT NOT NULL,
       collection_id TEXT NOT NULL,
       event_id TEXT NOT NULL,
       buyer_email TEXT NOT NULL,
       amount_cents INTEGER NOT NULL,
       currency TEXT NOT NULL,
       status TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      captured_at TEXT
+      created_at TEXT NOT NULL
     )
   `).run();
 
   await env.DB.prepare(`
-    CREATE TABLE IF NOT EXISTS paypal_order_items (
+    CREATE TABLE IF NOT EXISTS stripe_order_items (
       id TEXT PRIMARY KEY,
       order_id TEXT NOT NULL,
       image_id TEXT NOT NULL,
@@ -143,13 +106,13 @@ async function getCartImagesFromDb(env, collectionId, eventId, imageIds) {
   return images;
 }
 
-async function handlePaypalCreateOrder(request, env) {
+async function handleStripeCreateCheckout(request, env) {
   if (request.method !== "POST") {
     return jsonResponse(
       {
         ok: false,
         app: "FOTODECK",
-        service: "PayPal create order",
+        service: "Stripe create checkout",
         error: "Use POST"
       },
       405
@@ -161,8 +124,20 @@ async function handlePaypalCreateOrder(request, env) {
       {
         ok: false,
         app: "FOTODECK",
-        service: "PayPal create order",
+        service: "Stripe create checkout",
         error: "D1 binding DB is missing"
+      },
+      500
+    );
+  }
+
+  if (!env.STRIPE_SECRET_KEY) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Stripe create checkout",
+        error: "Stripe secret key is missing"
       },
       500
     );
@@ -181,7 +156,7 @@ async function handlePaypalCreateOrder(request, env) {
         {
           ok: false,
           app: "FOTODECK",
-          service: "PayPal create order",
+          service: "Stripe create checkout",
           error: "collectionId and eventId are required"
         },
         400
@@ -193,14 +168,14 @@ async function handlePaypalCreateOrder(request, env) {
         {
           ok: false,
           app: "FOTODECK",
-          service: "PayPal create order",
+          service: "Stripe create checkout",
           error: "Valid buyerEmail is required"
         },
         400
       );
     }
 
-    await ensurePaypalTables(env);
+    await ensureStripeTables(env);
 
     const images = await getCartImagesFromDb(env, collectionId, eventId, imageIds);
     const amountCents = images.reduce((total, image) => total + Number(image.price_cents || 0), 0);
@@ -210,136 +185,102 @@ async function handlePaypalCreateOrder(request, env) {
         {
           ok: false,
           app: "FOTODECK",
-          service: "PayPal create order",
+          service: "Stripe create checkout",
           error: "Cart total must be greater than zero"
         },
         400
       );
     }
 
-    const accessToken = await getPaypalAccessToken(env);
-    const paypalBaseUrl = getPaypalBaseUrl(env);
     const checkedAt = new Date().toISOString();
     const origin = getRequestOrigin(request);
     const localOrderId = crypto.randomUUID();
 
-    const items = images.map((image) => ({
-      name: image.file_name || "FOTODECK photo",
-      quantity: "1",
-      unit_amount: {
-        currency_code: "NZD",
-        value: makePaypalAmount(image.price_cents)
-      },
-      category: "DIGITAL_GOODS"
-    }));
+    const successUrl = `${origin}/view?collectionId=${encodeURIComponent(collectionId)}&eventId=${encodeURIComponent(eventId)}&stripe=success&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${origin}/view?collectionId=${encodeURIComponent(collectionId)}&eventId=${encodeURIComponent(eventId)}&stripe=cancel`;
 
-    const paypalPayload = {
-      intent: "CAPTURE",
-      purchase_units: [
-        {
-          reference_id: localOrderId,
-          description: `${images[0].collection_name || "FOTODECK"} / ${images[0].event_name || "Event"}`,
-          amount: {
-            currency_code: "NZD",
-            value: makePaypalAmount(amountCents),
-            breakdown: {
-              item_total: {
-                currency_code: "NZD",
-                value: makePaypalAmount(amountCents)
-              }
-            }
-          },
-          items
-        }
-      ],
-      payment_source: {
-        paypal: {
-          experience_context: {
-            payment_method_preference: "IMMEDIATE_PAYMENT_REQUIRED",
-            brand_name: "FOTODECK",
-            locale: "en-NZ",
-            landing_page: "LOGIN",
-            shipping_preference: "NO_SHIPPING",
-            user_action: "PAY_NOW",
-            return_url: `${origin}/?paypal=return&localOrderId=${encodeURIComponent(localOrderId)}`,
-            cancel_url: `${origin}/?paypal=cancel&localOrderId=${encodeURIComponent(localOrderId)}`
-          }
-        }
-      }
-    };
+    const stripeParams = new URLSearchParams();
 
-    const paypalResponse = await fetch(`${paypalBaseUrl}/v2/checkout/orders`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-        "PayPal-Request-Id": localOrderId
-      },
-      body: JSON.stringify(paypalPayload)
+    stripeParams.append("mode", "payment");
+    stripeParams.append("success_url", successUrl);
+    stripeParams.append("cancel_url", cancelUrl);
+    stripeParams.append("customer_email", buyerEmail);
+    stripeParams.append("client_reference_id", localOrderId);
+    stripeParams.append("payment_method_types[0]", "card");
+    stripeParams.append("metadata[local_order_id]", localOrderId);
+    stripeParams.append("metadata[collection_id]", collectionId);
+    stripeParams.append("metadata[event_id]", eventId);
+    stripeParams.append("metadata[buyer_email]", buyerEmail);
+    stripeParams.append("payment_intent_data[metadata][local_order_id]", localOrderId);
+    stripeParams.append("payment_intent_data[metadata][collection_id]", collectionId);
+    stripeParams.append("payment_intent_data[metadata][event_id]", eventId);
+    stripeParams.append("payment_intent_data[metadata][buyer_email]", buyerEmail);
+
+    images.forEach((image, index) => {
+      const imageName = image.file_name || "FOTODECK photo";
+      const cleanPriceCents = Number(image.price_cents || 0);
+
+      stripeParams.append(`line_items[${index}][quantity]`, "1");
+      stripeParams.append(`line_items[${index}][price_data][currency]`, "nzd");
+      stripeParams.append(`line_items[${index}][price_data][unit_amount]`, String(cleanPriceCents));
+      stripeParams.append(`line_items[${index}][price_data][product_data][name]`, imageName);
+      stripeParams.append(`line_items[${index}][price_data][product_data][description]`, `${image.collection_name || "FOTODECK"} / ${image.event_name || "Event"}`);
     });
 
-    const paypalResult = await paypalResponse.json();
+    const stripeResponse = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${env.STRIPE_SECRET_KEY}`,
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: stripeParams.toString()
+    });
 
-    if (!paypalResponse.ok || !paypalResult.id) {
+    const stripeResult = await stripeResponse.json();
+
+    if (!stripeResponse.ok || !stripeResult.id || !stripeResult.url) {
       return jsonResponse(
         {
           ok: false,
           app: "FOTODECK",
-          service: "PayPal create order",
-          error: paypalResult.message || paypalResult.name || "PayPal order could not be created",
-          paypal: paypalResult
-        },
-        502
-      );
-    }
-
-    const approvalLink = (paypalResult.links || []).find((link) =>
-      link.rel === "payer-action" || link.rel === "approve"
-    );
-
-    if (!approvalLink || !approvalLink.href) {
-      return jsonResponse(
-        {
-          ok: false,
-          app: "FOTODECK",
-          service: "PayPal create order",
-          error: "PayPal approval link was not returned",
-          paypal: paypalResult
+          service: "Stripe create checkout",
+          error: stripeResult.error && stripeResult.error.message
+            ? stripeResult.error.message
+            : "Stripe Checkout Session could not be created",
+          stripe: stripeResult
         },
         502
       );
     }
 
     await env.DB.prepare(`
-      INSERT INTO paypal_orders (
+      INSERT INTO stripe_orders (
         id,
-        paypal_order_id,
+        stripe_session_id,
         collection_id,
         event_id,
         buyer_email,
         amount_cents,
         currency,
         status,
-        created_at,
-        captured_at
+        created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       localOrderId,
-      paypalResult.id,
+      stripeResult.id,
       collectionId,
       eventId,
       buyerEmail,
       amountCents,
       "NZD",
       "CREATED",
-      checkedAt,
-      null
+      checkedAt
     ).run();
 
     for (const image of images) {
       await env.DB.prepare(`
-        INSERT INTO paypal_order_items (
+        INSERT INTO stripe_order_items (
           id,
           order_id,
           image_id,
@@ -363,18 +304,18 @@ async function handlePaypalCreateOrder(request, env) {
     return jsonResponse({
       ok: true,
       app: "FOTODECK",
-      service: "PayPal create order",
+      service: "Stripe create checkout",
       order: {
         id: localOrderId,
-        paypal_order_id: paypalResult.id,
+        stripe_session_id: stripeResult.id,
         buyer_email: buyerEmail,
         amount_cents: amountCents,
-        amount: makePaypalAmount(amountCents),
+        amount: makeMoneyAmount(amountCents),
         currency: "NZD",
         photo_count: images.length,
         status: "CREATED"
       },
-      approvalUrl: approvalLink.href,
+      checkoutUrl: stripeResult.url,
       checkedAt
     });
   } catch (error) {
@@ -382,167 +323,7 @@ async function handlePaypalCreateOrder(request, env) {
       {
         ok: false,
         app: "FOTODECK",
-        service: "PayPal create order",
-        error: error.message,
-        checkedAt: new Date().toISOString()
-      },
-      500
-    );
-  }
-}
-
-async function handlePaypalCaptureOrder(request, env) {
-  if (request.method !== "POST") {
-    return jsonResponse(
-      {
-        ok: false,
-        app: "FOTODECK",
-        service: "PayPal capture order",
-        error: "Use POST"
-      },
-      405
-    );
-  }
-
-  if (!env.DB) {
-    return jsonResponse(
-      {
-        ok: false,
-        app: "FOTODECK",
-        service: "PayPal capture order",
-        error: "D1 binding DB is missing"
-      },
-      500
-    );
-  }
-
-  try {
-    const body = await request.json();
-    const localOrderId = body && body.localOrderId ? String(body.localOrderId).trim() : "";
-    const paypalOrderIdFromBody = body && body.paypalOrderId ? String(body.paypalOrderId).trim() : "";
-
-    if (!localOrderId && !paypalOrderIdFromBody) {
-      return jsonResponse(
-        {
-          ok: false,
-          app: "FOTODECK",
-          service: "PayPal capture order",
-          error: "localOrderId or paypalOrderId is required"
-        },
-        400
-      );
-    }
-
-    await ensurePaypalTables(env);
-
-    const order = localOrderId
-      ? await env.DB.prepare(`
-        SELECT *
-        FROM paypal_orders
-        WHERE id = ?
-      `).bind(localOrderId).first()
-      : await env.DB.prepare(`
-        SELECT *
-        FROM paypal_orders
-        WHERE paypal_order_id = ?
-      `).bind(paypalOrderIdFromBody).first();
-
-    if (!order) {
-      return jsonResponse(
-        {
-          ok: false,
-          app: "FOTODECK",
-          service: "PayPal capture order",
-          error: "Local PayPal order record was not found"
-        },
-        404
-      );
-    }
-
-    if (order.status === "COMPLETED") {
-      return jsonResponse({
-        ok: true,
-        app: "FOTODECK",
-        service: "PayPal capture order",
-        order,
-        alreadyCaptured: true,
-        checkedAt: new Date().toISOString()
-      });
-    }
-
-    const accessToken = await getPaypalAccessToken(env);
-    const paypalBaseUrl = getPaypalBaseUrl(env);
-
-    const paypalResponse = await fetch(`${paypalBaseUrl}/v2/checkout/orders/${encodeURIComponent(order.paypal_order_id)}/capture`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-        "PayPal-Request-Id": `${order.id}-capture`
-      }
-    });
-
-    const paypalResult = await paypalResponse.json();
-
-    if (!paypalResponse.ok || paypalResult.status !== "COMPLETED") {
-      return jsonResponse(
-        {
-          ok: false,
-          app: "FOTODECK",
-          service: "PayPal capture order",
-          error: paypalResult.message || paypalResult.name || "PayPal order could not be captured",
-          paypal: paypalResult
-        },
-        502
-      );
-    }
-
-    const capturedAt = new Date().toISOString();
-
-    await env.DB.prepare(`
-      UPDATE paypal_orders
-      SET status = ?, captured_at = ?
-      WHERE id = ?
-    `).bind("COMPLETED", capturedAt, order.id).run();
-
-    const itemsResult = await env.DB.prepare(`
-      SELECT
-        image_id,
-        file_name,
-        display_key,
-        price_cents
-      FROM paypal_order_items
-      WHERE order_id = ?
-      ORDER BY created_at ASC
-    `).bind(order.id).all();
-
-    return jsonResponse({
-      ok: true,
-      app: "FOTODECK",
-      service: "PayPal capture order",
-      order: {
-        id: order.id,
-        paypal_order_id: order.paypal_order_id,
-        buyer_email: order.buyer_email,
-        amount_cents: order.amount_cents,
-        amount: makePaypalAmount(order.amount_cents),
-        currency: order.currency,
-        status: "COMPLETED",
-        captured_at: capturedAt
-      },
-      items: itemsResult.results || [],
-      paypal: {
-        id: paypalResult.id,
-        status: paypalResult.status
-      },
-      checkedAt: capturedAt
-    });
-  } catch (error) {
-    return jsonResponse(
-      {
-        ok: false,
-        app: "FOTODECK",
-        service: "PayPal capture order",
+        service: "Stripe create checkout",
         error: error.message,
         checkedAt: new Date().toISOString()
       },
@@ -1363,7 +1144,7 @@ async function handleUpdateEventPrice(request, env) {
         event_id: eventId,
         event_name: event.name,
         price_cents: priceCents,
-        price: makePaypalAmount(priceCents),
+        price: makeMoneyAmount(priceCents),
         changed_rows: result.meta && typeof result.meta.changes === "number" ? result.meta.changes : null
       },
       checkedAt: new Date().toISOString()
@@ -1414,12 +1195,8 @@ export default {
       return handleUpdateEventPrice(request, env);
     }
 
-    if (url.pathname === "/api/paypal-create-order") {
-      return handlePaypalCreateOrder(request, env);
-    }
-
-    if (url.pathname === "/api/paypal-capture-order") {
-      return handlePaypalCaptureOrder(request, env);
+    if (url.pathname === "/api/stripe-create-checkout") {
+      return handleStripeCreateCheckout(request, env);
     }
 
     if (env.ASSETS) {
