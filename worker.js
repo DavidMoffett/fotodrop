@@ -535,6 +535,131 @@ async function handleCollectionsEvents(request, env) {
   }
 }
 
+async function handleUpdateCollection(request, env) {
+  if (request.method !== "POST") {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Update collection",
+        error: "Use POST with collectionId, collectionName, price, watermarkText"
+      },
+      405
+    );
+  }
+
+  if (!env.DB) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Update collection",
+        error: "D1 binding DB is missing"
+      },
+      500
+    );
+  }
+
+  try {
+    const body = await request.json();
+
+    const collectionId = body && body.collectionId ? String(body.collectionId).trim() : "";
+    const collectionName = body && body.collectionName ? String(body.collectionName).trim() : "";
+    const priceCents = centsFromPrice(body && body.price);
+    const watermarkText = safeText(body && body.watermarkText, "FOTODECK");
+
+    if (!collectionId) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Update collection",
+          error: "collectionId is required"
+        },
+        400
+      );
+    }
+
+    if (!collectionName) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Update collection",
+          error: "collectionName is required"
+        },
+        400
+      );
+    }
+
+    const collection = await env.DB.prepare(`
+      SELECT
+        id,
+        name,
+        created_at
+      FROM collections
+      WHERE id = ?
+    `).bind(collectionId).first();
+
+    if (!collection) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Update collection",
+          error: "Collection was not found",
+          collectionId
+        },
+        404
+      );
+    }
+
+    await env.DB.prepare(`
+      UPDATE collections
+      SET name = ?
+      WHERE id = ?
+    `).bind(collectionName, collectionId).run();
+
+    const imagesResult = await env.DB.prepare(`
+      UPDATE images
+      SET price_cents = ?,
+          watermark_text = ?
+      WHERE collection_id = ?
+    `).bind(priceCents, watermarkText, collectionId).run();
+
+    const changedRows = imagesResult.meta && typeof imagesResult.meta.changes === "number"
+      ? imagesResult.meta.changes
+      : null;
+
+    return jsonResponse({
+      ok: true,
+      app: "FOTODECK",
+      service: "Update collection",
+      updated: {
+        collection_id: collectionId,
+        previous_collection_name: collection.name,
+        collection_name: collectionName,
+        price_cents: priceCents,
+        price: makeMoneyAmount(priceCents),
+        watermark_text: watermarkText,
+        changed_photo_rows: changedRows
+      },
+      checkedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Update collection",
+        error: error.message,
+        checkedAt: new Date().toISOString()
+      },
+      500
+    );
+  }
+}
+
 async function handleDisplayImage(request, env) {
   if (request.method !== "GET") {
     return jsonResponse(
@@ -1173,6 +1298,10 @@ export default {
 
     if (url.pathname === "/api/collections-events") {
       return handleCollectionsEvents(request, env);
+    }
+
+    if (url.pathname === "/api/update-collection") {
+      return handleUpdateCollection(request, env);
     }
 
     if (url.pathname === "/api/display-image") {
