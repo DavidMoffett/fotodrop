@@ -25,6 +25,532 @@ function centsFromPrice(value) {
   return Math.round(number * 100);
 }
 
+function getPaypalBaseUrl(env) {
+  const paypalEnv = String(env.PAYPAL_ENV || "sandbox").trim().toLowerCase();
+
+  if (paypalEnv === "live") {
+    return "https://api-m.paypal.com";
+  }
+
+  return "https://api-m.sandbox.paypal.com";
+}
+
+function getRequestOrigin(request) {
+  const url = new URL(request.url);
+  return url.origin;
+}
+
+function makePaypalAmount(cents) {
+  return (Number(cents || 0) / 100).toFixed(2);
+}
+
+async function getPaypalAccessToken(env) {
+  if (!env.PAYPAL_CLIENT_ID || !env.PAYPAL_CLIENT_SECRET) {
+    throw new Error("PayPal credentials are missing");
+  }
+
+  const paypalBaseUrl = getPaypalBaseUrl(env);
+  const credentials = btoa(`${env.PAYPAL_CLIENT_ID}:${env.PAYPAL_CLIENT_SECRET}`);
+
+  const response = await fetch(`${paypalBaseUrl}/v1/oauth2/token`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Basic ${credentials}`,
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: "grant_type=client_credentials"
+  });
+
+  const result = await response.json();
+
+  if (!response.ok || !result.access_token) {
+    throw new Error(result.error_description || result.error || "Could not get PayPal access token");
+  }
+
+  return result.access_token;
+}
+
+async function ensurePaypalTables(env) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS paypal_orders (
+      id TEXT PRIMARY KEY,
+      paypal_order_id TEXT NOT NULL,
+      collection_id TEXT NOT NULL,
+      event_id TEXT NOT NULL,
+      buyer_email TEXT NOT NULL,
+      amount_cents INTEGER NOT NULL,
+      currency TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      captured_at TEXT
+    )
+  `).run();
+
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS paypal_order_items (
+      id TEXT PRIMARY KEY,
+      order_id TEXT NOT NULL,
+      image_id TEXT NOT NULL,
+      file_name TEXT NOT NULL,
+      display_key TEXT NOT NULL,
+      price_cents INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    )
+  `).run();
+}
+
+async function getCartImagesFromDb(env, collectionId, eventId, imageIds) {
+  const cleanImageIds = Array.from(new Set(
+    (imageIds || [])
+      .map((id) => String(id || "").trim())
+      .filter(Boolean)
+  ));
+
+  if (cleanImageIds.length === 0) {
+    throw new Error("At least one image is required");
+  }
+
+  if (cleanImageIds.length > 100) {
+    throw new Error("Too many images in cart");
+  }
+
+  const placeholders = cleanImageIds.map(() => "?").join(", ");
+
+  const result = await env.DB.prepare(`
+    SELECT
+      images.id,
+      images.file_name,
+      images.display_key,
+      images.price_cents,
+      images.collection_id,
+      images.event_id,
+      events.name AS event_name,
+      collections.name AS collection_name
+    FROM images
+    JOIN events ON images.event_id = events.id
+    JOIN collections ON images.collection_id = collections.id
+    WHERE images.collection_id = ?
+    AND images.event_id = ?
+    AND images.id IN (${placeholders})
+  `).bind(collectionId, eventId, ...cleanImageIds).all();
+
+  const images = result.results || [];
+
+  if (images.length !== cleanImageIds.length) {
+    throw new Error("One or more cart images could not be found");
+  }
+
+  return images;
+}
+
+async function handlePaypalCreateOrder(request, env) {
+  if (request.method !== "POST") {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "PayPal create order",
+        error: "Use POST"
+      },
+      405
+    );
+  }
+
+  if (!env.DB) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "PayPal create order",
+        error: "D1 binding DB is missing"
+      },
+      500
+    );
+  }
+
+  try {
+    const body = await request.json();
+
+    const collectionId = body && body.collectionId ? String(body.collectionId).trim() : "";
+    const eventId = body && body.eventId ? String(body.eventId).trim() : "";
+    const buyerEmail = body && body.buyerEmail ? String(body.buyerEmail).trim().toLowerCase() : "";
+    const imageIds = body && Array.isArray(body.imageIds) ? body.imageIds : [];
+
+    if (!collectionId || !eventId) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "PayPal create order",
+          error: "collectionId and eventId are required"
+        },
+        400
+      );
+    }
+
+    if (!buyerEmail || !buyerEmail.includes("@")) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "PayPal create order",
+          error: "Valid buyerEmail is required"
+        },
+        400
+      );
+    }
+
+    await ensurePaypalTables(env);
+
+    const images = await getCartImagesFromDb(env, collectionId, eventId, imageIds);
+    const amountCents = images.reduce((total, image) => total + Number(image.price_cents || 0), 0);
+
+    if (amountCents <= 0) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "PayPal create order",
+          error: "Cart total must be greater than zero"
+        },
+        400
+      );
+    }
+
+    const accessToken = await getPaypalAccessToken(env);
+    const paypalBaseUrl = getPaypalBaseUrl(env);
+    const checkedAt = new Date().toISOString();
+    const origin = getRequestOrigin(request);
+    const localOrderId = crypto.randomUUID();
+
+    const items = images.map((image) => ({
+      name: image.file_name || "FOTODECK photo",
+      quantity: "1",
+      unit_amount: {
+        currency_code: "NZD",
+        value: makePaypalAmount(image.price_cents)
+      },
+      category: "DIGITAL_GOODS"
+    }));
+
+    const paypalPayload = {
+      intent: "CAPTURE",
+      purchase_units: [
+        {
+          reference_id: localOrderId,
+          description: `${images[0].collection_name || "FOTODECK"} / ${images[0].event_name || "Event"}`,
+          amount: {
+            currency_code: "NZD",
+            value: makePaypalAmount(amountCents),
+            breakdown: {
+              item_total: {
+                currency_code: "NZD",
+                value: makePaypalAmount(amountCents)
+              }
+            }
+          },
+          items
+        }
+      ],
+      payment_source: {
+        paypal: {
+          experience_context: {
+            payment_method_preference: "IMMEDIATE_PAYMENT_REQUIRED",
+            brand_name: "FOTODECK",
+            locale: "en-NZ",
+            landing_page: "LOGIN",
+            shipping_preference: "NO_SHIPPING",
+            user_action: "PAY_NOW",
+            return_url: `${origin}/?paypal=return&localOrderId=${encodeURIComponent(localOrderId)}`,
+            cancel_url: `${origin}/?paypal=cancel&localOrderId=${encodeURIComponent(localOrderId)}`
+          }
+        }
+      }
+    };
+
+    const paypalResponse = await fetch(`${paypalBaseUrl}/v2/checkout/orders`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "PayPal-Request-Id": localOrderId
+      },
+      body: JSON.stringify(paypalPayload)
+    });
+
+    const paypalResult = await paypalResponse.json();
+
+    if (!paypalResponse.ok || !paypalResult.id) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "PayPal create order",
+          error: paypalResult.message || paypalResult.name || "PayPal order could not be created",
+          paypal: paypalResult
+        },
+        502
+      );
+    }
+
+    const approvalLink = (paypalResult.links || []).find((link) =>
+      link.rel === "payer-action" || link.rel === "approve"
+    );
+
+    if (!approvalLink || !approvalLink.href) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "PayPal create order",
+          error: "PayPal approval link was not returned",
+          paypal: paypalResult
+        },
+        502
+      );
+    }
+
+    await env.DB.prepare(`
+      INSERT INTO paypal_orders (
+        id,
+        paypal_order_id,
+        collection_id,
+        event_id,
+        buyer_email,
+        amount_cents,
+        currency,
+        status,
+        created_at,
+        captured_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      localOrderId,
+      paypalResult.id,
+      collectionId,
+      eventId,
+      buyerEmail,
+      amountCents,
+      "NZD",
+      "CREATED",
+      checkedAt,
+      null
+    ).run();
+
+    for (const image of images) {
+      await env.DB.prepare(`
+        INSERT INTO paypal_order_items (
+          id,
+          order_id,
+          image_id,
+          file_name,
+          display_key,
+          price_cents,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        crypto.randomUUID(),
+        localOrderId,
+        image.id,
+        image.file_name,
+        image.display_key,
+        Number(image.price_cents || 0),
+        checkedAt
+      ).run();
+    }
+
+    return jsonResponse({
+      ok: true,
+      app: "FOTODECK",
+      service: "PayPal create order",
+      order: {
+        id: localOrderId,
+        paypal_order_id: paypalResult.id,
+        buyer_email: buyerEmail,
+        amount_cents: amountCents,
+        amount: makePaypalAmount(amountCents),
+        currency: "NZD",
+        photo_count: images.length,
+        status: "CREATED"
+      },
+      approvalUrl: approvalLink.href,
+      checkedAt
+    });
+  } catch (error) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "PayPal create order",
+        error: error.message,
+        checkedAt: new Date().toISOString()
+      },
+      500
+    );
+  }
+}
+
+async function handlePaypalCaptureOrder(request, env) {
+  if (request.method !== "POST") {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "PayPal capture order",
+        error: "Use POST"
+      },
+      405
+    );
+  }
+
+  if (!env.DB) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "PayPal capture order",
+        error: "D1 binding DB is missing"
+      },
+      500
+    );
+  }
+
+  try {
+    const body = await request.json();
+    const localOrderId = body && body.localOrderId ? String(body.localOrderId).trim() : "";
+    const paypalOrderIdFromBody = body && body.paypalOrderId ? String(body.paypalOrderId).trim() : "";
+
+    if (!localOrderId && !paypalOrderIdFromBody) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "PayPal capture order",
+          error: "localOrderId or paypalOrderId is required"
+        },
+        400
+      );
+    }
+
+    await ensurePaypalTables(env);
+
+    const order = localOrderId
+      ? await env.DB.prepare(`
+        SELECT *
+        FROM paypal_orders
+        WHERE id = ?
+      `).bind(localOrderId).first()
+      : await env.DB.prepare(`
+        SELECT *
+        FROM paypal_orders
+        WHERE paypal_order_id = ?
+      `).bind(paypalOrderIdFromBody).first();
+
+    if (!order) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "PayPal capture order",
+          error: "Local PayPal order record was not found"
+        },
+        404
+      );
+    }
+
+    if (order.status === "COMPLETED") {
+      return jsonResponse({
+        ok: true,
+        app: "FOTODECK",
+        service: "PayPal capture order",
+        order,
+        alreadyCaptured: true,
+        checkedAt: new Date().toISOString()
+      });
+    }
+
+    const accessToken = await getPaypalAccessToken(env);
+    const paypalBaseUrl = getPaypalBaseUrl(env);
+
+    const paypalResponse = await fetch(`${paypalBaseUrl}/v2/checkout/orders/${encodeURIComponent(order.paypal_order_id)}/capture`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "PayPal-Request-Id": `${order.id}-capture`
+      }
+    });
+
+    const paypalResult = await paypalResponse.json();
+
+    if (!paypalResponse.ok || paypalResult.status !== "COMPLETED") {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "PayPal capture order",
+          error: paypalResult.message || paypalResult.name || "PayPal order could not be captured",
+          paypal: paypalResult
+        },
+        502
+      );
+    }
+
+    const capturedAt = new Date().toISOString();
+
+    await env.DB.prepare(`
+      UPDATE paypal_orders
+      SET status = ?, captured_at = ?
+      WHERE id = ?
+    `).bind("COMPLETED", capturedAt, order.id).run();
+
+    const itemsResult = await env.DB.prepare(`
+      SELECT
+        image_id,
+        file_name,
+        display_key,
+        price_cents
+      FROM paypal_order_items
+      WHERE order_id = ?
+      ORDER BY created_at ASC
+    `).bind(order.id).all();
+
+    return jsonResponse({
+      ok: true,
+      app: "FOTODECK",
+      service: "PayPal capture order",
+      order: {
+        id: order.id,
+        paypal_order_id: order.paypal_order_id,
+        buyer_email: order.buyer_email,
+        amount_cents: order.amount_cents,
+        amount: makePaypalAmount(order.amount_cents),
+        currency: order.currency,
+        status: "COMPLETED",
+        captured_at: capturedAt
+      },
+      items: itemsResult.results || [],
+      paypal: {
+        id: paypalResult.id,
+        status: paypalResult.status
+      },
+      checkedAt: capturedAt
+    });
+  } catch (error) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "PayPal capture order",
+        error: error.message,
+        checkedAt: new Date().toISOString()
+      },
+      500
+    );
+  }
+}
+
 async function handleImages(request, env) {
   if (request.method !== "GET") {
     return jsonResponse(
@@ -779,6 +1305,14 @@ export default {
 
     if (url.pathname === "/api/delete-event") {
       return handleDeleteEvent(request, env);
+    }
+
+    if (url.pathname === "/api/paypal-create-order") {
+      return handlePaypalCreateOrder(request, env);
+    }
+
+    if (url.pathname === "/api/paypal-capture-order") {
+      return handlePaypalCaptureOrder(request, env);
     }
 
     if (env.ASSETS) {
