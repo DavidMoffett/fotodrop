@@ -207,8 +207,11 @@ function App() {
     setCartStatus(`Selected ${photo.name}`)
   }
 
-  function handleAddToCartFromLightbox(photo) {
-    handleAddToCart(photo)
+  function handleLightboxCartAction(photo) {
+    if (!isPhotoInCart(photo)) {
+      handleAddToCart(photo)
+    }
+
     setSelectedPhoto(null)
     setView('photo-grid')
   }
@@ -1207,16 +1210,8 @@ function App() {
                   NZ${getPhotoPrice(selectedPhoto).toFixed(2)}
                 </p>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!isPhotoInCart(selectedPhoto)) {
-                      handleAddToCartFromLightbox(selectedPhoto)
-                    }
-                  }}
-                  disabled={isPhotoInCart(selectedPhoto)}
-                >
-                  {isPhotoInCart(selectedPhoto) ? 'Selected' : 'Add to cart'}
+                <button type="button" onClick={() => handleLightboxCartAction(selectedPhoto)}>
+                  {isPhotoInCart(selectedPhoto) ? 'Back to photos' : 'Add to cart'}
                 </button>
               </div>
             </div>
