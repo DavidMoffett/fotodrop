@@ -106,6 +106,12 @@ function App() {
   const [isCheckingOut, setIsCheckingOut] = useState(false)
   const [priceStatus, setPriceStatus] = useState('No price edit yet')
   const [isUpdatingPrice, setIsUpdatingPrice] = useState(false)
+  const [editingCollectionId, setEditingCollectionId] = useState('')
+  const [collectionEditName, setCollectionEditName] = useState('')
+  const [collectionEditPrice, setCollectionEditPrice] = useState('7')
+  const [collectionEditWatermark, setCollectionEditWatermark] = useState('FOTODECK')
+  const [collectionEditStatus, setCollectionEditStatus] = useState('No collection edit yet')
+  const [isSavingCollectionEdit, setIsSavingCollectionEdit] = useState(false)
   const [signupBusinessName, setSignupBusinessName] = useState('')
   const [signupEmail, setSignupEmail] = useState('')
   const [signupPhone, setSignupPhone] = useState('')
@@ -139,8 +145,16 @@ function App() {
       await handleLoadPublicEvent(collectionId, eventId)
     }
 
+    async function loadStudioViewFromUrl() {
+      await handleLoadSavedCollectionsEvents()
+    }
+
     if (window.location.pathname === '/view') {
       loadPublicViewFromUrl()
+    }
+
+    if (window.location.pathname === '/admin') {
+      loadStudioViewFromUrl()
     }
   }, [])
 
@@ -155,6 +169,15 @@ function App() {
     setCartStatus('Cart is empty')
     setIsCheckingOut(false)
     setPriceStatus('No price edit yet')
+  }
+
+  function clearCollectionEditState() {
+    setEditingCollectionId('')
+    setCollectionEditName('')
+    setCollectionEditPrice('7')
+    setCollectionEditWatermark('FOTODECK')
+    setCollectionEditStatus('No collection edit yet')
+    setIsSavingCollectionEdit(false)
   }
 
   function mapSavedPhotoToPhoto(photo) {
@@ -352,6 +375,151 @@ function App() {
     } catch (error) {
       setCartStatus(error.message || 'Card checkout could not be opened')
       setIsCheckingOut(false)
+    }
+  }
+
+  async function handleEditCollection(collection) {
+    const collectionEvents = savedEvents.filter((event) => event.collection_id === collection.id)
+    const firstEvent = collectionEvents[0] || null
+
+    setEditingCollectionId(collection.id)
+    setCollectionEditName(collection.name || 'FOTODECK')
+    setCollectionEditPrice(singlePhotoPrice || '7')
+    setCollectionEditWatermark(watermarkText || 'FOTODECK')
+    setCollectionEditStatus(`Editing ${collection.name || 'Collection'}`)
+    setIsSavingCollectionEdit(false)
+
+    setActiveCollectionId(collection.id)
+    setActiveEventId(firstEvent?.id || '')
+    setCollectionName(collection.name || 'FOTODECK')
+    setEventName(firstEvent?.name || 'Event')
+    setPhotos([])
+    setVisiblePhotoCount(24)
+    setSelectedPhoto(null)
+    setCartItems([])
+    setBuyerEmail('')
+    setCartStatus('Cart is empty')
+    setPriceStatus(`Editing ${collection.name || 'Collection'} collection settings`)
+
+    if (!firstEvent) {
+      setLoadStatus('Selected collection has no saved events yet')
+      return
+    }
+
+    setLoadStatus(`Loading saved photos for ${firstEvent.name || 'selected event'}...`)
+
+    try {
+      const response = await fetch(
+        `/api/images?collectionId=${encodeURIComponent(collection.id)}&eventId=${encodeURIComponent(firstEvent.id)}`
+      )
+      const result = await response.json()
+
+      if (!response.ok || !result.ok || !result.images || result.images.length === 0) {
+        setPhotos([])
+        setVisiblePhotoCount(24)
+        setLoadStatus(result.error || 'No saved photos found for this collection')
+        return
+      }
+
+      const savedPhotos = sortPhotosFirstFirst(result.images.map(mapSavedPhotoToPhoto))
+      const firstPhoto = result.images[0] || {}
+      const savedPrice = priceFromCents(firstPhoto.price_cents)
+      const savedWatermark = firstPhoto.watermark_text || watermarkText || 'FOTODECK'
+
+      setPhotos(savedPhotos)
+      setVisiblePhotoCount(24)
+
+      if (savedPrice) {
+        setSinglePhotoPrice(savedPrice)
+        setCollectionEditPrice(savedPrice)
+      }
+
+      setWatermarkText(savedWatermark)
+      setCollectionEditWatermark(savedWatermark)
+      setLoadStatus(`Loaded ${savedPhotos.length} saved photo${savedPhotos.length === 1 ? '' : 's'} for collection editing`)
+    } catch (error) {
+      setLoadStatus(error.message || 'Saved photos could not be loaded')
+    }
+  }
+
+  function handleCancelCollectionEdit() {
+    clearCollectionEditState()
+    setPriceStatus('Collection edit cancelled')
+  }
+
+  async function handleSaveCollectionEdit() {
+    const collectionId = editingCollectionId
+    const nextName = collectionEditName.trim()
+    const price = Number(collectionEditPrice)
+    const nextWatermark = collectionEditWatermark.trim() || 'FOTODECK'
+
+    if (!collectionId) {
+      setCollectionEditStatus('Choose a collection before saving')
+      return
+    }
+
+    if (!nextName) {
+      setCollectionEditStatus('Enter collection name')
+      return
+    }
+
+    if (!Number.isFinite(price) || price < 0) {
+      setCollectionEditStatus('Enter a valid photo price')
+      return
+    }
+
+    setIsSavingCollectionEdit(true)
+    setCollectionEditStatus(`Saving ${nextName}...`)
+
+    try {
+      const response = await fetch('/api/update-collection', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          collectionId,
+          collectionName: nextName,
+          price,
+          watermarkText: nextWatermark,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok || !result.ok) {
+        setCollectionEditStatus(result.error || 'Collection could not be saved')
+        setIsSavingCollectionEdit(false)
+        return
+      }
+
+      const updatedPriceCents = Math.round(price * 100)
+
+      setCollectionName(nextName)
+      setSinglePhotoPrice(String(price))
+      setWatermarkText(nextWatermark)
+      setPhotos((currentPhotos) =>
+        currentPhotos.map((photo) => ({
+          ...photo,
+          collectionName: nextName,
+          priceCents: updatedPriceCents,
+          watermarkText: nextWatermark,
+        }))
+      )
+      setCartItems([])
+      setCartStatus('Cart cleared after collection change')
+      setPriceStatus(`Saved ${nextName} collection settings`)
+      setCollectionEditStatus(`Saved ${nextName}`)
+      setIsSavingCollectionEdit(false)
+
+      await handleLoadSavedCollectionsEvents()
+
+      if (activeCollectionId === collectionId && activeEventId) {
+        await handleLoadSavedPhotos(collectionId, activeEventId)
+      }
+    } catch (error) {
+      setCollectionEditStatus(error.message || 'Collection could not be saved')
+      setIsSavingCollectionEdit(false)
     }
   }
 
@@ -619,7 +787,7 @@ function App() {
   }
 
   async function handleLoadSavedCollectionsEvents() {
-    setSavedStatus('Loading events...')
+    setSavedStatus('Loading collections...')
 
     try {
       const response = await fetch('/api/collections-events')
@@ -629,7 +797,7 @@ function App() {
         setSavedCollections([])
         setSavedEvents([])
         setEventCoverUrls({})
-        setSavedStatus(result.error || 'Events could not be loaded')
+        setSavedStatus(result.error || 'Collections could not be loaded')
         return
       }
 
@@ -646,7 +814,7 @@ function App() {
       setSavedCollections([])
       setSavedEvents([])
       setEventCoverUrls({})
-      setSavedStatus(error.message || 'Events could not be loaded')
+      setSavedStatus(error.message || 'Collections could not be loaded')
     }
   }
 
@@ -661,7 +829,7 @@ function App() {
     setCartItems([])
     setBuyerEmail('')
     setCartStatus('Cart is empty')
-    setPriceStatus(`Selected ${event.name || 'Event'} for price editing`)
+    setPriceStatus(`Selected ${event.name || 'Event'}`)
     setSavedStatus(`Selected ${collection.name || 'Collection'} / ${event.name || 'Event'}`)
     await handleLoadSavedPhotos(collection.id, event.id)
   }
@@ -815,13 +983,14 @@ function App() {
     }
   }
 
-  function handleOpenCustomerView() {
-    if (photos.length === 0) {
-      setLoadStatus('Load or upload photos before opening customer view')
-      return
-    }
+  function handleDeleteEventButtonClick(clickEvent, collection, event) {
+    clickEvent.preventDefault()
+    clickEvent.stopPropagation()
+    handleDeleteEvent(collection, event)
+  }
 
-    window.location.href = getPublicViewUrl()
+  function handleOpenCustomerView() {
+    window.location.href = '/view'
   }
 
   function handleReset() {
@@ -857,6 +1026,7 @@ function App() {
     setIsCheckingOut(false)
     setPriceStatus('No price edit yet')
     setIsUpdatingPrice(false)
+    clearCollectionEditState()
   }
 
   function handleAdminReturn() {
@@ -1353,21 +1523,6 @@ function App() {
                 <button className="photo-loader-button" type="button" onClick={() => handleLoadSavedPhotos()} disabled={isUploading}>
                   Load current event
                 </button>
-
-                <button
-                  className="photo-loader-button"
-                  type="button"
-                  onClick={handleUpdateSelectedEventPrice}
-                  disabled={isUploading || isUpdatingPrice || !activeCollectionId || !activeEventId}
-                >
-                  {isUpdatingPrice ? 'Saving price...' : 'Save selected event price'}
-                </button>
-              </div>
-
-              <div className="empty-photo-space">
-                <strong>{priceStatus}</strong>
-                <br />
-                <span>{activeCollectionId && activeEventId ? `${window.location.origin}${getPublicViewUrl()}` : 'Select a saved event to create a public view link.'}</span>
               </div>
             </section>
 
@@ -1381,13 +1536,84 @@ function App() {
                 </div>
 
                 <button className="dark-action" type="button" onClick={handleLoadSavedCollectionsEvents} disabled={isUploading}>
-                  Load saved list
+                  Load Collections
                 </button>
               </div>
 
-              <div className="empty-photo-space">
-                <strong>{savedStatus || 'Saved collections not loaded yet'}</strong>
-              </div>
+              {(savedStatus || savedCollections.length === 0) && (
+                <div className="empty-photo-space">
+                  <strong>{savedStatus || 'No saved collections yet'}</strong>
+                </div>
+              )}
+
+              {editingCollectionId && (
+                <section className="studio-panel">
+                  <div className="preview-heading">
+                    <div>
+                      <p className="soft-label">
+                        Collection edit
+                      </p>
+                      <h1 style={smallHeadingStyle}>{collectionEditName || 'Collection'}</h1>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <button type="button" onClick={handleCancelCollectionEdit} disabled={isSavingCollectionEdit}>
+                        Cancel
+                      </button>
+
+                      <button
+                        className="dark-action"
+                        type="button"
+                        onClick={handleSaveCollectionEdit}
+                        disabled={isUploading || isSavingCollectionEdit}
+                      >
+                        {isSavingCollectionEdit ? 'Saving...' : 'Save collection changes'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="studio-fields">
+                    <label>
+                      Collection name
+                      <input
+                        type="text"
+                        value={collectionEditName}
+                        placeholder="FOTODECK"
+                        onChange={(event) => setCollectionEditName(event.target.value)}
+                        disabled={isUploading || isSavingCollectionEdit}
+                      />
+                    </label>
+
+                    <label>
+                      Collection photo price
+                      <input
+                        type="number"
+                        min="0"
+                        value={collectionEditPrice}
+                        onChange={(event) => setCollectionEditPrice(event.target.value)}
+                        disabled={isUploading || isSavingCollectionEdit}
+                      />
+                    </label>
+
+                    <label>
+                      Collection fotomark
+                      <input
+                        type="text"
+                        value={collectionEditWatermark}
+                        placeholder="FOTODECK"
+                        onChange={(event) => setCollectionEditWatermark(event.target.value)}
+                        disabled={isUploading || isSavingCollectionEdit}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="empty-photo-space">
+                    <strong>{collectionEditStatus}</strong>
+                    <br />
+                    <span>Collection id stays unchanged: {editingCollectionId}</span>
+                  </div>
+                </section>
+              )}
 
               {savedCollections.length > 0 && (
                 <div className="studio-view">
@@ -1404,8 +1630,18 @@ function App() {
                             <h1 style={smallHeadingStyle}>{collection.name}</h1>
                           </div>
 
-                          <div className="price-mark">
-                            {collection.photo_count} photo{collection.photo_count === 1 ? '' : 's'}
+                          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+                            <div className="price-mark">
+                              {collection.photo_count} photo{collection.photo_count === 1 ? '' : 's'}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleEditCollection(collection)}
+                              disabled={isUploading || isSavingCollectionEdit}
+                            >
+                              {editingCollectionId === collection.id ? 'Editing' : 'Edit Collection'}
+                            </button>
                           </div>
                         </div>
 
@@ -1433,7 +1669,7 @@ function App() {
                                   <span>{event.id}</span>
                                   <button
                                     type="button"
-                                    onClick={() => handleDeleteEvent(collection, event)}
+                                    onClick={(clickEvent) => handleDeleteEventButtonClick(clickEvent, collection, event)}
                                     disabled={isUploading || deletingEventId === event.id}
                                   >
                                     {deletingEventId === event.id ? 'Deleting...' : 'Delete Event'}
@@ -1456,7 +1692,7 @@ function App() {
                   className="dark-action"
                   type="button"
                   onClick={handleOpenCustomerView}
-                  disabled={photos.length === 0 || isUploading}
+                  disabled={isUploading}
                 >
                   Open customer view
                 </button>

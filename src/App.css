@@ -2,7 +2,7 @@
 
 :root {
   color: #222222;
-  background: #dedede;
+  background: #b8b8b8;
   font-family: "Manrope", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -14,7 +14,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background: #dedede;
+  background: #b8b8b8;
   font-family: "Manrope", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -35,14 +35,14 @@ button:disabled {
 .deck-page {
   min-height: 100vh;
   padding: 28px;
-  background: #dedede;
+  background: #b8b8b8;
 }
 
 .deck-shell {
   width: min(100%, 1240px);
   min-height: calc(100vh - 56px);
   margin: 0 auto;
-  background: #dedede;
+  background: #b8b8b8;
 }
 
 .deck-header {
@@ -75,8 +75,8 @@ button:disabled {
   border: 0;
   border-radius: 999px;
   padding: 9px 13px;
-  background: #cecece;
-  color: #333333;
+  background: #9f9f9f;
+  color: #222222;
   font-size: 0.86rem;
   font-weight: 750;
 }
@@ -108,7 +108,7 @@ button:disabled {
 
 .soft-label {
   margin: 0 0 12px;
-  color: #666666;
+  color: #4f4f4f;
   font-size: 0.76rem;
   font-weight: 850;
   letter-spacing: 0.14em;
@@ -139,7 +139,7 @@ h2 {
 .entry-card p:not(.soft-label),
 .customer-line,
 .lightbox-bottom p {
-  color: #555555;
+  color: #444444;
   font-size: 1.02rem;
   line-height: 1.55;
 }
@@ -149,7 +149,7 @@ h2 {
   gap: 16px;
   padding: 18px;
   border-radius: 30px;
-  background: #d2d2d2;
+  background: #a8a8a8;
 }
 
 .studio-fields {
@@ -162,7 +162,7 @@ h2 {
 .entry-form label {
   display: grid;
   gap: 7px;
-  color: #333333;
+  color: #222222;
   font-size: 0.86rem;
   font-weight: 750;
 }
@@ -173,14 +173,14 @@ h2 {
   padding: 13px 14px;
   border: 0;
   border-radius: 16px;
-  background: #e8e8e8;
+  background: #d0d0d0;
   color: #222222;
   outline: none;
 }
 
 .studio-fields input:focus,
 .entry-form input:focus {
-  box-shadow: 0 0 0 3px rgba(40, 40, 40, 0.12);
+  box-shadow: 0 0 0 3px rgba(40, 40, 40, 0.18);
 }
 
 .photo-loader {
@@ -188,7 +188,7 @@ h2 {
   display: grid;
   place-items: center;
   border-radius: 24px;
-  background: #c4c4c4;
+  background: #969696;
 }
 
 .photo-loader-button {
@@ -219,7 +219,7 @@ h2 {
 .collection-view {
   padding: 22px;
   border-radius: 34px;
-  background: #d2d2d2;
+  background: #a8a8a8;
 }
 
 .preview-heading,
@@ -250,8 +250,8 @@ h2 {
   place-items: center;
   min-height: 180px;
   border-radius: 24px;
-  background: #c4c4c4;
-  color: #666666;
+  background: #969696;
+  color: #333333;
   font-weight: 750;
 }
 
@@ -267,7 +267,7 @@ h2 {
   position: relative;
   overflow: hidden;
   border-radius: 22px;
-  background: #c4c4c4;
+  background: #969696;
 }
 
 .mosaic-card > button,
@@ -295,7 +295,7 @@ h2 {
 .studio-panel > .studio-view > .studio-preview {
   padding: 16px;
   border-radius: 26px;
-  background: #d2d2d2;
+  background: #a8a8a8;
 }
 
 .studio-panel > .studio-view > .studio-preview .preview-heading {
@@ -352,8 +352,8 @@ h2 {
 .price-mark {
   border-radius: 999px;
   padding: 10px 14px;
-  background: #c4c4c4;
-  color: #333333;
+  background: #969696;
+  color: #222222;
   font-weight: 850;
   white-space: nowrap;
 }
@@ -370,7 +370,7 @@ h2 {
   min-height: 180px;
   overflow: hidden;
   border-radius: 24px;
-  background: #c4c4c4;
+  background: #969696;
 }
 
 .wall-tile {
@@ -413,7 +413,7 @@ h2 {
   position: relative;
   overflow: hidden;
   border-radius: 24px 24px 0 0;
-  background: #c4c4c4;
+  background: #969696;
 }
 
 .wall-tile-media img {
@@ -425,7 +425,7 @@ h2 {
 
 .wall-tile-name-below {
   padding: 10px 12px 12px;
-  background: #cecece;
+  background: #9f9f9f;
   color: #222222;
   font-size: 0.78rem;
   font-weight: 850;
@@ -442,12 +442,12 @@ h2 {
   gap: 10px;
   align-items: center;
   padding: 10px;
-  background: #cecece;
+  background: #9f9f9f;
 }
 
 .buy-row > span {
   overflow: hidden;
-  color: #555555;
+  color: #333333;
   font-size: 0.78rem;
   font-weight: 650;
   text-overflow: ellipsis;
@@ -458,7 +458,7 @@ h2 {
   border: 0;
   border-radius: 999px;
   padding: 8px 10px;
-  background: #c4c4c4;
+  background: #969696;
   color: #222222;
   font-size: 0.76rem;
   font-weight: 850;
@@ -469,7 +469,7 @@ h2 {
   border: 0;
   border-radius: 999px;
   padding: 10px 14px;
-  background: #c4c4c4;
+  background: #969696;
   color: #222222;
   font-size: 0.82rem;
   font-weight: 850;
@@ -513,7 +513,7 @@ h2 {
   display: grid;
   place-items: center;
   padding: 28px;
-  background: rgba(222, 222, 222, 0.92);
+  background: rgba(184, 184, 184, 0.92);
   backdrop-filter: blur(14px);
 }
 
@@ -524,7 +524,7 @@ h2 {
   gap: 14px;
   padding: 18px;
   border-radius: 34px;
-  background: #d2d2d2;
+  background: #a8a8a8;
 }
 
 .lightbox-top {
@@ -533,7 +533,7 @@ h2 {
 
 .lightbox-top span {
   overflow: hidden;
-  color: #333333;
+  color: #222222;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -544,7 +544,7 @@ h2 {
   place-items: center;
   min-height: min(68vh, 720px);
   border-radius: 28px;
-  background: #c4c4c4;
+  background: #969696;
   overflow: hidden;
 }
 
