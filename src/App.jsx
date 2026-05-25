@@ -108,6 +108,11 @@ function App() {
   const [isCheckingOut, setIsCheckingOut] = useState(false)
   const [priceStatus, setPriceStatus] = useState('No price edit yet')
   const [isUpdatingPrice, setIsUpdatingPrice] = useState(false)
+  const [signupBusinessName, setSignupBusinessName] = useState('')
+  const [signupEmail, setSignupEmail] = useState('')
+  const [signupPhone, setSignupPhone] = useState('')
+  const [signupAddress, setSignupAddress] = useState('')
+  const [signupStatus, setSignupStatus] = useState('')
 
   useEffect(() => {
     async function captureReturnedPaypalOrder(localOrderId) {
@@ -266,6 +271,38 @@ function App() {
   function handleClearCart() {
     setCartItems([])
     setCartStatus('Cart cleared')
+  }
+
+  function handleLandingSignup(event) {
+    event.preventDefault()
+
+    const businessName = signupBusinessName.trim()
+    const email = signupEmail.trim()
+    const phone = signupPhone.trim()
+    const preferredAddress = signupAddress.trim()
+
+    if (!businessName) {
+      setSignupStatus('Enter your business or photography name')
+      return
+    }
+
+    if (!email || !email.includes('@')) {
+      setSignupStatus('Enter a valid email address')
+      return
+    }
+
+    const signup = {
+      businessName,
+      email,
+      phone,
+      preferredAddress,
+      createdAt: new Date().toISOString(),
+    }
+
+    window.localStorage.setItem('fotodeck_signup', JSON.stringify(signup))
+    window.localStorage.setItem('fotodeck_business_name', businessName)
+
+    window.location.href = '/admin'
   }
 
   async function handleCartCheckout() {
@@ -832,17 +869,86 @@ function App() {
                 <p className="soft-label">
                   FOTODECK
                 </p>
-                <h1 style={{ fontSize: '1.2rem', lineHeight: '1.1', letterSpacing: '-0.02em' }}>
-                  Photo collections for fast, simple viewing and checkout.
+
+                <h1 style={{ fontSize: '1.45rem', lineHeight: '1.1', letterSpacing: '-0.03em' }}>
+                  Sell event photos without the mess.
                 </h1>
+
+                <p style={{ marginTop: '12px', maxWidth: '680px', lineHeight: '1.45' }}>
+                  Create a fast public photo collection, let buyers choose the images they want, and send them straight to checkout.
+                </p>
               </div>
             </div>
 
-            <div className="empty-photo-space">
-              <strong>Public collection links open directly from the photographer.</strong>
-              <br />
-              <span>{cartStatus}</span>
-            </div>
+            <section className="studio-panel">
+              <div className="preview-heading">
+                <div>
+                  <p className="soft-label">
+                    Start
+                  </p>
+
+                  <h1 style={smallHeadingStyle}>
+                    Start your FOTODECK
+                  </h1>
+                </div>
+              </div>
+
+              <form onSubmit={handleLandingSignup}>
+                <div className="studio-fields">
+                  <label>
+                    Business / Photography name
+                    <input
+                      type="text"
+                      value={signupBusinessName}
+                      placeholder="Northside Photography"
+                      onChange={(event) => setSignupBusinessName(event.target.value)}
+                    />
+                  </label>
+
+                  <label>
+                    Email
+                    <input
+                      type="email"
+                      value={signupEmail}
+                      placeholder="you@example.com"
+                      onChange={(event) => setSignupEmail(event.target.value)}
+                    />
+                  </label>
+
+                  <label>
+                    Phone
+                    <input
+                      type="tel"
+                      value={signupPhone}
+                      placeholder="021 000 0000"
+                      onChange={(event) => setSignupPhone(event.target.value)}
+                    />
+                  </label>
+
+                  <label>
+                    Preferred public address
+                    <input
+                      type="text"
+                      value={signupAddress}
+                      placeholder="northside"
+                      onChange={(event) => setSignupAddress(event.target.value)}
+                    />
+                  </label>
+                </div>
+
+                <div className="photo-loader" style={{ marginTop: '16px' }}>
+                  <button className="dark-action" type="submit">
+                    Start FOTODECK
+                  </button>
+                </div>
+              </form>
+
+              <div className="empty-photo-space">
+                <strong>{signupStatus || 'Simple photo collections. Clean buyer checkout. No gallery chaos.'}</strong>
+                <br />
+                <span>Public collection links open directly from the photographer.</span>
+              </div>
+            </section>
           </section>
         )}
 
