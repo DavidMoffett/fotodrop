@@ -76,7 +76,15 @@ function getInitialView() {
   }
 
   if (pathname === '/view') {
-    return 'photo-grid'
+    const params = new URLSearchParams(window.location.search)
+    const collectionId = params.get('collectionId')
+    const eventId = params.get('eventId')
+
+    if (collectionId && eventId) {
+      return 'photo-grid'
+    }
+
+    return 'public-collections'
   }
 
   return 'landing'
@@ -149,7 +157,8 @@ function App() {
       const eventId = params.get('eventId')
 
       if (!collectionId || !eventId) {
-        setLoadStatus('Public view link is missing collection or event')
+        setView('public-collections')
+        await handleLoadSavedCollectionsEvents()
         return
       }
 
@@ -272,14 +281,14 @@ function App() {
     setCartStatus('Cart cleared')
   }
 
-  function handleLandingSignup(event) {
+  async function handleLandingSignup(event) {
     event.preventDefault()
 
-    const businessName = signupBusinessName.trim()
+    const visitorName = signupBusinessName.trim()
     const email = signupEmail.trim()
     const phone = signupPhone.trim()
 
-    if (!businessName) {
+    if (!visitorName) {
       setSignupStatus('Enter name')
       return
     }
@@ -295,19 +304,18 @@ function App() {
     }
 
     const signup = {
-      businessName,
+      name: visitorName,
       email,
       phone,
       createdAt: new Date().toISOString(),
     }
 
-    window.localStorage.setItem('fotodeck_signup', JSON.stringify(signup))
-    window.localStorage.setItem('fotodeck_business_name', businessName)
+    window.localStorage.setItem('fotodeck_visitor', JSON.stringify(signup))
 
-    setCollectionName(businessName)
-    setSignupStatus('Details saved. Opening FOTODECK...')
-
-    window.location.href = '/admin'
+    setSignupStatus('Details saved. Opening Collections...')
+    setView('public-collections')
+    window.history.pushState({}, document.title, '/view')
+    await handleLoadSavedCollectionsEvents()
   }
 
   function handleSecretAdminOpen() {
@@ -622,6 +630,25 @@ function App() {
     await handleLoadSavedPhotos(collection.id, event.id)
   }
 
+  async function handleOpenPublicEvent(collection, event) {
+    setActiveCollectionId(collection.id)
+    setActiveEventId(event.id)
+    setCollectionName(collection.name || 'FOTODECK')
+    setEventName(event.name || 'Event')
+    setPhotos([])
+    setSelectedPhoto(null)
+    setCartItems([])
+    setBuyerEmail('')
+    setCartStatus('Cart is empty')
+    setView('photo-grid')
+    window.history.pushState(
+      {},
+      document.title,
+      `/view?collectionId=${encodeURIComponent(collection.id)}&eventId=${encodeURIComponent(event.id)}`
+    )
+    await handleLoadPublicEvent(collection.id, event.id)
+  }
+
   async function handleDeletePhoto(photo) {
     const confirmed = window.confirm(
       `Delete this photo from FOTODECK?\n\n${photo.name}\n\nThis removes the saved record and display file.`
@@ -796,14 +823,6 @@ function App() {
 
     if (answer && answer.trim().toLowerCase() === 'funga safari') {
       setSelectedPhoto(null)
-      window.location.href = '/admin'
-    }
-  }
-
-  function handleSecretAdminOpen() {
-    const answer = window.prompt('Security word')
-
-    if (answer && answer.trim().toLowerCase() === 'funga safari') {
       window.location.href = '/admin'
     }
   }
@@ -1207,6 +1226,90 @@ function App() {
                 </div>
               )}
             </section>
+          </section>
+        )}
+
+        {view === 'public-collections' && (
+          <section className="collection-view">
+            <div className="collection-heading">
+              <div>
+                <p className="soft-label">Collections</p>
+              </div>
+            </div>
+
+            <section className="studio-preview" style={{ marginBottom: '18px' }}>
+              <div className="preview-heading">
+                <div>
+                  <p className="soft-label">
+                    Saved
+                  </p>
+                  <h1 style={smallHeadingStyle}>Choose a Collection / Event</h1>
+                </div>
+
+                <button className="dark-action" type="button" onClick={handleLoadSavedCollectionsEvents}>
+                  Refresh
+                </button>
+              </div>
+
+              <div className="empty-photo-space">
+                <strong>{savedStatus}</strong>
+              </div>
+            </section>
+
+            {savedCollections.length === 0 && (
+              <div className="empty-photo-space">
+                No Collections loaded yet.
+              </div>
+            )}
+
+            {savedCollections.length > 0 && (
+              <div className="studio-view">
+                {savedCollections.map((collection) => {
+                  const collectionEvents = savedEvents.filter((event) => event.collection_id === collection.id)
+
+                  return (
+                    <section className="studio-preview" key={collection.id}>
+                      <div className="preview-heading">
+                        <div>
+                          <p className="soft-label">
+                            Collection
+                          </p>
+                          <h1 style={smallHeadingStyle}>{collection.name}</h1>
+                        </div>
+
+                        <div className="price-mark">
+                          {collection.photo_count} photo{collection.photo_count === 1 ? '' : 's'}
+                        </div>
+                      </div>
+
+                      {collectionEvents.length === 0 && (
+                        <div className="empty-photo-space">
+                          No events available for this collection.
+                        </div>
+                      )}
+
+                      {collectionEvents.length > 0 && (
+                        <div className="image-mosaic">
+                          {collectionEvents.map((event) => (
+                            <article className="mosaic-card" key={event.id}>
+                              <button type="button" onClick={() => handleOpenPublicEvent(collection, event)}>
+                                <div className="empty-photo-space">
+                                  <strong>{event.name}</strong>
+                                  <br />
+                                  <span>
+                                    {event.photo_count} photo{event.photo_count === 1 ? '' : 's'}
+                                  </span>
+                                </div>
+                              </button>
+                            </article>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  )
+                })}
+              </div>
+            )}
           </section>
         )}
 
