@@ -138,12 +138,18 @@ function App() {
 
   function handleAddToCart(photo) {
     if (isPhotoInCart(photo)) {
-      setCartStatus(`${photo.name} is already in the cart`)
+      setCartStatus(`${photo.name} is already selected`)
       return
     }
 
     setCartItems((currentItems) => [...currentItems, photo])
-    setCartStatus(`Added ${photo.name}`)
+    setCartStatus(`Selected ${photo.name}`)
+  }
+
+  function handleAddToCartFromLightbox(photo) {
+    handleAddToCart(photo)
+    setSelectedPhoto(null)
+    setView('photo-grid')
   }
 
   function handleRemoveFromCart(photo) {
@@ -488,10 +494,6 @@ function App() {
       setSelectedPhoto(null)
       setView('studio')
     }
-  }
-
-  function handlePurchaseStart(photo) {
-    handleAddToCart(photo)
   }
 
   function renderWatermark(text) {
@@ -925,14 +927,13 @@ function App() {
                         <button
                           type="button"
                           onClick={() => {
-                            if (inCart) {
-                              handleRemoveFromCart(photo)
-                            } else {
-                              handlePurchaseStart(photo)
+                            if (!inCart) {
+                              handleAddToCart(photo)
                             }
                           }}
+                          disabled={inCart}
                         >
-                          {inCart ? 'Remove' : `Add NZ$${getPhotoPrice(photo).toFixed(2)}`}
+                          {inCart ? 'Selected' : `Add NZ$${getPhotoPrice(photo).toFixed(2)}`}
                         </button>
                       </div>
                     </article>
@@ -945,7 +946,7 @@ function App() {
               <div className="preview-heading">
                 <div>
                   <p className="soft-label">
-                    Checkout details
+                    Checkout counter
                   </p>
                   <h1 style={smallHeadingStyle}>
                     {cartItems.length} photo{cartItems.length === 1 ? '' : 's'} / NZ${cartTotal.toFixed(2)}
@@ -971,14 +972,27 @@ function App() {
 
               <div className="empty-photo-space" style={{ marginTop: '12px' }}>
                 <strong>{cartStatus}</strong>
+
                 {cartItems.length > 0 && (
-                  <>
-                    <br />
-                    <span>
-                      {cartItems.map((item) => item.name).join(', ')}
-                    </span>
-                  </>
+                  <div style={{ width: '100%', display: 'grid', gap: '8px', marginTop: '12px' }}>
+                    {cartItems.map((item) => (
+                      <div
+                        key={item.id}
+                        className="buy-row"
+                        style={{
+                          width: '100%',
+                          borderRadius: '999px',
+                        }}
+                      >
+                        <span>{item.name}</span>
+                        <button type="button" onClick={() => handleRemoveFromCart(item)}>
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
+
                 {cartItems.length > 0 && (
                   <>
                     <br />
@@ -1022,14 +1036,13 @@ function App() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (isPhotoInCart(selectedPhoto)) {
-                      handleRemoveFromCart(selectedPhoto)
-                    } else {
-                      handleAddToCart(selectedPhoto)
+                    if (!isPhotoInCart(selectedPhoto)) {
+                      handleAddToCartFromLightbox(selectedPhoto)
                     }
                   }}
+                  disabled={isPhotoInCart(selectedPhoto)}
                 >
-                  {isPhotoInCart(selectedPhoto) ? 'Remove from cart' : 'Add to cart'}
+                  {isPhotoInCart(selectedPhoto) ? 'Selected' : 'Add to cart'}
                 </button>
               </div>
             </div>
