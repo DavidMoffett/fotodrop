@@ -1279,6 +1279,109 @@ async function handleDeleteEvent(request, env) {
   }
 }
 
+async function handleUpdateEventPrice(request, env) {
+  if (request.method !== "POST") {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Update event price",
+        error: "Use POST with collectionId, eventId, price"
+      },
+      405
+    );
+  }
+
+  if (!env.DB) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Update event price",
+        error: "D1 binding DB is missing"
+      },
+      500
+    );
+  }
+
+  try {
+    const body = await request.json();
+
+    const collectionId = body && body.collectionId ? String(body.collectionId).trim() : "";
+    const eventId = body && body.eventId ? String(body.eventId).trim() : "";
+    const priceCents = centsFromPrice(body && body.price);
+
+    if (!collectionId || !eventId) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Update event price",
+          error: "collectionId and eventId are required"
+        },
+        400
+      );
+    }
+
+    const event = await env.DB.prepare(`
+      SELECT
+        id,
+        collection_id,
+        name
+      FROM events
+      WHERE id = ?
+      AND collection_id = ?
+    `).bind(eventId, collectionId).first();
+
+    if (!event) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Update event price",
+          error: "Event was not found",
+          collectionId,
+          eventId
+        },
+        404
+      );
+    }
+
+    const result = await env.DB.prepare(`
+      UPDATE images
+      SET price_cents = ?
+      WHERE collection_id = ?
+      AND event_id = ?
+    `).bind(priceCents, collectionId, eventId).run();
+
+    return jsonResponse({
+      ok: true,
+      app: "FOTODECK",
+      service: "Update event price",
+      updated: {
+        collection_id: collectionId,
+        event_id: eventId,
+        event_name: event.name,
+        price_cents: priceCents,
+        price: makePaypalAmount(priceCents),
+        changed_rows: result.meta && typeof result.meta.changes === "number" ? result.meta.changes : null
+      },
+      checkedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Update event price",
+        error: error.message,
+        checkedAt: new Date().toISOString()
+      },
+      500
+    );
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -1305,6 +1408,10 @@ export default {
 
     if (url.pathname === "/api/delete-event") {
       return handleDeleteEvent(request, env);
+    }
+
+    if (url.pathname === "/api/update-event-price") {
+      return handleUpdateEventPrice(request, env);
     }
 
     if (url.pathname === "/api/paypal-create-order") {
