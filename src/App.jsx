@@ -87,6 +87,7 @@ function App() {
   const [singlePhotoPrice, setSinglePhotoPrice] = useState('7')
   const [watermarkText, setWatermarkText] = useState('FOTODECK')
   const [photos, setPhotos] = useState([])
+  const [visiblePhotoCount, setVisiblePhotoCount] = useState(24)
   const [selectedPhoto, setSelectedPhoto] = useState(null)
   const [loadStatus, setLoadStatus] = useState('No photos loaded yet')
   const [uploadStatus, setUploadStatus] = useState('No upload yet')
@@ -180,6 +181,7 @@ function App() {
 
   function clearVisiblePhotosForNewTarget() {
     setPhotos([])
+    setVisiblePhotoCount(24)
     setSelectedPhoto(null)
     setLoadStatus('No photos loaded yet')
     setDeleteStatus('No delete action yet')
@@ -268,6 +270,10 @@ function App() {
   function handleClearCart() {
     setCartItems([])
     setCartStatus('Cart cleared')
+  }
+
+  function handleLoadMorePhotos() {
+    setVisiblePhotoCount((currentCount) => currentCount + 24)
   }
 
   function handleScrollToCheckout() {
@@ -452,6 +458,7 @@ function App() {
     }
 
     setPhotos([])
+    setVisiblePhotoCount(24)
     setSelectedPhoto(null)
     setCartItems([])
     setBuyerEmail('')
@@ -520,6 +527,7 @@ function App() {
     const sortedUploadedPhotos = sortPhotosFirstFirst(uploadedPhotos)
 
     setPhotos(sortedUploadedPhotos)
+    setVisiblePhotoCount(24)
     setIsUploading(false)
     setUploadProgress({
       total: files.length,
@@ -542,6 +550,7 @@ function App() {
 
       if (!response.ok || !result.ok || !result.images || result.images.length === 0) {
         setPhotos([])
+        setVisiblePhotoCount(24)
         setCartItems([])
         setCartStatus('Cart is empty')
         setLoadStatus(result.error || 'No photos found')
@@ -553,6 +562,7 @@ function App() {
       const savedPrice = priceFromCents(firstPhoto?.priceCents)
 
       setPhotos(savedPhotos)
+      setVisiblePhotoCount(24)
       setCollectionName(firstPhoto?.collectionName || 'Collection')
       setEventName(firstPhoto?.eventName || 'Event')
       setActiveCollectionId(collectionId)
@@ -585,6 +595,7 @@ function App() {
 
       if (!response.ok || !result.ok || !result.images || result.images.length === 0) {
         setPhotos([])
+        setVisiblePhotoCount(24)
         setCartItems([])
         setCartStatus('Cart is empty')
         setLoadStatus(result.error || 'No saved photos found for this event')
@@ -595,6 +606,7 @@ function App() {
       const savedPrice = priceFromCents(savedPhotos[0]?.priceCents)
 
       setPhotos(savedPhotos)
+      setVisiblePhotoCount(24)
 
       if (savedPrice) {
         setSinglePhotoPrice(savedPrice)
@@ -611,37 +623,34 @@ function App() {
   async function loadEventCoverPhotos(collectionsToUse, eventsToUse) {
     const nextCoverUrls = {}
 
-    await Promise.all(
-      eventsToUse.map(async (event) => {
-        try {
-          const collection = collectionsToUse.find((item) => item.id === event.collection_id)
+    for (const event of eventsToUse) {
+      try {
+        const collection = collectionsToUse.find((item) => item.id === event.collection_id)
 
-          if (!collection) {
-            return
-          }
-
-          const response = await fetch(
-            `/api/images?collectionId=${encodeURIComponent(collection.id)}&eventId=${encodeURIComponent(event.id)}`
-          )
-          const result = await response.json()
-
-          if (!response.ok || !result.ok || !result.images || result.images.length === 0) {
-            return
-          }
-
-          const sortedImages = sortPhotosFirstFirst(result.images)
-          const firstImage = sortedImages[0]
-
-          if (firstImage?.display_key) {
-            nextCoverUrls[event.id] = makeDisplayPhotoUrl(firstImage.display_key)
-          }
-        } catch {
-          nextCoverUrls[event.id] = ''
+        if (!collection) {
+          continue
         }
-      })
-    )
 
-    setEventCoverUrls(nextCoverUrls)
+        const response = await fetch(
+          `/api/images?collectionId=${encodeURIComponent(collection.id)}&eventId=${encodeURIComponent(event.id)}`
+        )
+        const result = await response.json()
+
+        if (!response.ok || !result.ok || !result.images || result.images.length === 0) {
+          continue
+        }
+
+        const sortedImages = sortPhotosFirstFirst(result.images)
+        const firstImage = sortedImages[0]
+
+        if (firstImage?.display_key) {
+          nextCoverUrls[event.id] = makeDisplayPhotoUrl(firstImage.display_key)
+          setEventCoverUrls({ ...nextCoverUrls })
+        }
+      } catch {
+        nextCoverUrls[event.id] = ''
+      }
+    }
   }
 
   async function handleLoadSavedCollectionsEvents() {
@@ -682,6 +691,7 @@ function App() {
     setCollectionName(collection.name || 'FOTODECK')
     setEventName(event.name || 'Event')
     setPhotos([])
+    setVisiblePhotoCount(24)
     setSelectedPhoto(null)
     setCartItems([])
     setBuyerEmail('')
@@ -697,6 +707,7 @@ function App() {
     setCollectionName(collection.name || 'FOTODECK')
     setEventName(event.name || 'Event')
     setPhotos([])
+    setVisiblePhotoCount(24)
     setSelectedPhoto(null)
     setCartItems([])
     setBuyerEmail('')
@@ -822,6 +833,7 @@ function App() {
         setActiveEventId('')
         setEventName('Event')
         setPhotos([])
+        setVisiblePhotoCount(24)
         setSelectedPhoto(null)
         setCartItems([])
         setBuyerEmail('')
@@ -866,6 +878,7 @@ function App() {
     setSinglePhotoPrice('7')
     setWatermarkText('FOTODECK')
     setPhotos([])
+    setVisiblePhotoCount(24)
     setSelectedPhoto(null)
     setLoadStatus('No photos loaded yet')
     setUploadStatus('No upload yet')
@@ -1130,6 +1143,8 @@ function App() {
     lineHeight: '1.1',
     letterSpacing: '0.02em',
   }
+  const visiblePhotos = photos.slice(0, visiblePhotoCount)
+  const hiddenPhotoCount = Math.max(0, photos.length - visiblePhotos.length)
 
   return (
     <main className="deck-page">
@@ -1515,7 +1530,12 @@ function App() {
                   {photos.map((photo) => (
                     <article className="mosaic-card" key={photo.id}>
                       <button type="button" onClick={() => setSelectedPhoto(photo)}>
-                        <img src={photo.previewUrl} alt={photo.name} />
+                        <img
+                          src={photo.previewUrl}
+                          alt={photo.name}
+                          loading="lazy"
+                          decoding="async"
+                        />
                         {renderWatermark(watermarkText)}
                       </button>
 
@@ -1605,35 +1625,56 @@ function App() {
             )}
 
             {photos.length > 0 && (
-              <div className="customer-grid">
-                {photos.map((photo) => {
-                  const inCart = isPhotoInCart(photo)
+              <>
+                <div className="customer-grid">
+                  {visiblePhotos.map((photo) => {
+                    const inCart = isPhotoInCart(photo)
 
-                  return (
-                    <article className="customer-photo" key={photo.id}>
-                      <button type="button" onClick={() => setSelectedPhoto(photo)}>
-                        <img src={photo.previewUrl} alt={photo.name} />
-                        {renderWatermark(watermarkText)}
-                      </button>
-
-                      <div className="buy-row">
-                        <span>{photo.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!inCart) {
-                              handleAddToCart(photo)
-                            }
-                          }}
-                          disabled={inCart}
-                        >
-                          {inCart ? 'Selected' : `Add NZ$${getPhotoPrice(photo).toFixed(2)}`}
+                    return (
+                      <article className="customer-photo" key={photo.id}>
+                        <button type="button" onClick={() => setSelectedPhoto(photo)}>
+                          <img
+                            src={photo.previewUrl}
+                            alt={photo.name}
+                            loading="lazy"
+                            decoding="async"
+                          />
+                          {renderWatermark(watermarkText)}
                         </button>
-                      </div>
-                    </article>
-                  )
-                })}
-              </div>
+
+                        <div className="buy-row">
+                          <span>{photo.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!inCart) {
+                                handleAddToCart(photo)
+                              }
+                            }}
+                            disabled={inCart}
+                          >
+                            {inCart ? 'Selected' : `Add NZ$${getPhotoPrice(photo).toFixed(2)}`}
+                          </button>
+                        </div>
+                      </article>
+                    )
+                  })}
+                </div>
+
+                {hiddenPhotoCount > 0 && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      marginTop: '20px',
+                    }}
+                  >
+                    <button className="dark-action" type="button" onClick={handleLoadMorePhotos}>
+                      Load {Math.min(24, hiddenPhotoCount)} more photo{Math.min(24, hiddenPhotoCount) === 1 ? '' : 's'}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
 
             <section ref={checkoutRef} className="studio-preview" style={{ marginTop: '18px', scrollMarginTop: '20px' }}>
@@ -1714,7 +1755,12 @@ function App() {
 
               <div className="lightbox-image">
                 <div className="lightbox-photo-frame">
-                  <img src={selectedPhoto.previewUrl} alt={selectedPhoto.name} />
+                  <img
+                    src={selectedPhoto.previewUrl}
+                    alt={selectedPhoto.name}
+                    loading="eager"
+                    decoding="async"
+                  />
                   {renderWatermark(watermarkText)}
                 </div>
               </div>
