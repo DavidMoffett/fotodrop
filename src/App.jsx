@@ -68,8 +68,22 @@ function priceFromCents(priceCents) {
   return (cents / 100).toFixed(2).replace(/\.00$/, '')
 }
 
+function getInitialView() {
+  const pathname = window.location.pathname
+
+  if (pathname === '/admin') {
+    return 'studio'
+  }
+
+  if (pathname === '/view') {
+    return 'photo-grid'
+  }
+
+  return 'landing'
+}
+
 function App() {
-  const [view, setView] = useState('studio')
+  const [view, setView] = useState(getInitialView)
   const [collectionName, setCollectionName] = useState('FOTODECK')
   const [eventName, setEventName] = useState('Event')
   const [activeCollectionId, setActiveCollectionId] = useState('')
@@ -125,6 +139,22 @@ function App() {
       }
     }
 
+    async function loadPublicViewFromUrl() {
+      const params = new URLSearchParams(window.location.search)
+      const collectionId = params.get('collectionId')
+      const eventId = params.get('eventId')
+
+      if (!collectionId || !eventId) {
+        setLoadStatus('Public view link is missing collection or event')
+        return
+      }
+
+      setActiveCollectionId(collectionId)
+      setActiveEventId(eventId)
+      setView('photo-grid')
+      await handleLoadPublicEvent(collectionId, eventId)
+    }
+
     const params = new URLSearchParams(window.location.search)
     const paypalStatus = params.get('paypal')
     const localOrderId = params.get('localOrderId')
@@ -138,6 +168,11 @@ function App() {
     if (paypalStatus === 'return' && localOrderId) {
       captureReturnedPaypalOrder(localOrderId)
       window.history.replaceState({}, document.title, window.location.pathname)
+      return
+    }
+
+    if (window.location.pathname === '/view') {
+      loadPublicViewFromUrl()
     }
   }, [])
 
@@ -173,6 +208,13 @@ function App() {
 
   function getCurrentEventId() {
     return activeEventId || makeSafeId(eventName, 'event')
+  }
+
+  function getPublicViewUrl() {
+    const collectionId = getCurrentCollectionId()
+    const eventId = getCurrentEventId()
+
+    return `/view?collectionId=${encodeURIComponent(collectionId)}&eventId=${encodeURIComponent(eventId)}`
   }
 
   function getPhotoPrice(photo) {
@@ -416,6 +458,46 @@ function App() {
     event.target.value = ''
   }
 
+  async function handleLoadPublicEvent(collectionId, eventId) {
+    setLoadStatus('Loading public event...')
+
+    try {
+      const response = await fetch(
+        `/api/images?collectionId=${encodeURIComponent(collectionId)}&eventId=${encodeURIComponent(eventId)}`
+      )
+      const result = await response.json()
+
+      if (!response.ok || !result.ok || !result.images || result.images.length === 0) {
+        setPhotos([])
+        setCartItems([])
+        setCartStatus('Cart is empty')
+        setLoadStatus(result.error || 'No photos found for this public link')
+        return
+      }
+
+      const savedPhotos = sortPhotosFirstFirst(result.images.map(mapSavedPhotoToPhoto))
+      const firstPhoto = savedPhotos[0]
+      const savedPrice = priceFromCents(firstPhoto?.priceCents)
+
+      setPhotos(savedPhotos)
+      setCollectionName(firstPhoto?.collectionName || 'Collection')
+      setEventName(firstPhoto?.eventName || 'Event')
+      setActiveCollectionId(collectionId)
+      setActiveEventId(eventId)
+
+      if (savedPrice) {
+        setSinglePhotoPrice(savedPrice)
+      }
+
+      setCartItems([])
+      setBuyerEmail('')
+      setCartStatus('Cart is empty')
+      setLoadStatus(`Loaded ${savedPhotos.length} photo${savedPhotos.length === 1 ? '' : 's'}`)
+    } catch (error) {
+      setLoadStatus(error.message || 'Public event could not be loaded')
+    }
+  }
+
   async function handleLoadSavedPhotos(collectionIdOverride, eventIdOverride) {
     const collectionId = collectionIdOverride || getCurrentCollectionId()
     const eventId = eventIdOverride || getCurrentEventId()
@@ -616,6 +698,15 @@ function App() {
     }
   }
 
+  function handleOpenCustomerView() {
+    if (photos.length === 0) {
+      setLoadStatus('Load or upload photos before opening customer view')
+      return
+    }
+
+    window.location.href = getPublicViewUrl()
+  }
+
   function handleReset() {
     const message = isUploading
       ? 'Uploads may still be running in the background. Reset only clears the screen. Continue?'
@@ -655,7 +746,7 @@ function App() {
 
     if (answer && answer.trim().toLowerCase() === 'funga safari') {
       setSelectedPhoto(null)
-      setView('studio')
+      window.location.href = '/admin'
     }
   }
 
@@ -703,8 +794,8 @@ function App() {
               <button type="button" onClick={() => setView('studio')}>
                 Studio
               </button>
-              <button type="button" onClick={() => setView('collection-wall')}>
-                Customer view
+              <button type="button" onClick={handleOpenCustomerView}>
+                Open customer view
               </button>
               <button type="button" onClick={() => handleLoadSavedPhotos()}>
                 Load current event
@@ -715,7 +806,7 @@ function App() {
             </nav>
           )}
 
-          {!isStudioView && (
+          {view !== 'studio' && view !== 'landing' && (
             <button
               type="button"
               onClick={handleAdminReturn}
@@ -733,6 +824,27 @@ function App() {
             />
           )}
         </header>
+
+        {view === 'landing' && (
+          <section className="collection-view">
+            <div className="collection-heading">
+              <div>
+                <p className="soft-label">
+                  FOTODECK
+                </p>
+                <h1 style={{ fontSize: '1.2rem', lineHeight: '1.1', letterSpacing: '-0.02em' }}>
+                  Photo collections for fast, simple viewing and checkout.
+                </h1>
+              </div>
+            </div>
+
+            <div className="empty-photo-space">
+              <strong>Public collection links open directly from the photographer.</strong>
+              <br />
+              <span>{cartStatus}</span>
+            </div>
+          </section>
+        )}
 
         {view === 'studio' && (
           <section className="studio-view">
@@ -827,6 +939,8 @@ function App() {
 
               <div className="empty-photo-space">
                 <strong>{priceStatus}</strong>
+                <br />
+                <span>{activeCollectionId && activeEventId ? `${window.location.origin}${getPublicViewUrl()}` : 'Select a saved event to create a public view link.'}</span>
               </div>
             </section>
 
@@ -914,7 +1028,7 @@ function App() {
                 <button
                   className="dark-action"
                   type="button"
-                  onClick={() => setView('collection-wall')}
+                  onClick={handleOpenCustomerView}
                   disabled={photos.length === 0 || isUploading}
                 >
                   Open customer view
@@ -976,77 +1090,6 @@ function App() {
           </section>
         )}
 
-        {view === 'collection-wall' && (
-          <section className="collection-view">
-            <div className="collection-heading">
-              <div>
-                <p className="soft-label">
-                  FOTODECK
-                </p>
-
-                <h1 style={smallHeadingStyle}>Collections</h1>
-              </div>
-            </div>
-
-            <div className="wall-grid-five">
-              <article className="wall-tile" role="button" tabIndex="0" onClick={() => setView('event-wall')}>
-                {tilePhoto && <img src={tilePhoto} alt={collectionName || 'Collection'} />}
-                {tilePhoto && renderWatermark(watermarkText)}
-
-                <div className="wall-tile-label">
-                  {collectionName || 'Collection'}
-                </div>
-              </article>
-
-              <article className="empty-wall-tile" />
-              <article className="empty-wall-tile" />
-              <article className="empty-wall-tile" />
-              <article className="empty-wall-tile" />
-            </div>
-          </section>
-        )}
-
-        {view === 'event-wall' && (
-          <section className="collection-view">
-            <div className="collection-heading">
-              <div>
-                <p className="soft-label">
-                  {collectionName || 'Collection'}
-                </p>
-
-                <h1 style={smallHeadingStyle}>Events</h1>
-              </div>
-            </div>
-
-            <div className="wall-grid-five">
-              <article
-                className="wall-tile wall-tile-stacked"
-                role="button"
-                tabIndex="0"
-                onClick={() => setView('photo-grid')}
-              >
-                <div className="wall-tile-media">
-                  {tilePhoto && <img src={tilePhoto} alt={eventName || 'Event'} />}
-                  {tilePhoto && renderWatermark(watermarkText)}
-                </div>
-
-                <div className="wall-tile-name-below">
-                  {eventName || 'Event'}
-                </div>
-              </article>
-
-              <article className="empty-wall-tile" />
-              <article className="empty-wall-tile" />
-              <article className="empty-wall-tile" />
-              <article className="empty-wall-tile" />
-            </div>
-
-            <button className="back-button" type="button" onClick={() => setView('collection-wall')}>
-              Back to collections
-            </button>
-          </section>
-        )}
-
         {view === 'photo-grid' && (
           <section className="collection-view">
             <div className="collection-heading">
@@ -1082,7 +1125,7 @@ function App() {
 
             {photos.length === 0 && (
               <div className="empty-photo-space">
-                No photos have been added yet.
+                {loadStatus}
               </div>
             )}
 
@@ -1180,10 +1223,6 @@ function App() {
                 )}
               </div>
             </section>
-
-            <button className="back-button" type="button" onClick={() => setView('event-wall')}>
-              Back to events
-            </button>
           </section>
         )}
 
