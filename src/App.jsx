@@ -111,7 +111,6 @@ function App() {
   const [signupBusinessName, setSignupBusinessName] = useState('')
   const [signupEmail, setSignupEmail] = useState('')
   const [signupPhone, setSignupPhone] = useState('')
-  const [signupAddress, setSignupAddress] = useState('')
   const [signupStatus, setSignupStatus] = useState('')
 
   useEffect(() => {
@@ -279,7 +278,6 @@ function App() {
     const businessName = signupBusinessName.trim()
     const email = signupEmail.trim()
     const phone = signupPhone.trim()
-    const preferredAddress = signupAddress.trim()
 
     if (!businessName) {
       setSignupStatus('Enter your business or photography name')
@@ -291,18 +289,30 @@ function App() {
       return
     }
 
+    if (!phone) {
+      setSignupStatus('Enter your phone number')
+      return
+    }
+
     const signup = {
       businessName,
       email,
       phone,
-      preferredAddress,
       createdAt: new Date().toISOString(),
     }
 
     window.localStorage.setItem('fotodeck_signup', JSON.stringify(signup))
     window.localStorage.setItem('fotodeck_business_name', businessName)
 
-    window.location.href = '/admin'
+    setSignupStatus('Thanks — your FOTODECK start details are saved.')
+  }
+
+  function handleSecretAdminOpen() {
+    const answer = window.prompt('Security word')
+
+    if (answer && answer.trim().toLowerCase() === 'funga safari') {
+      window.location.href = '/admin'
+    }
   }
 
   async function handleCartCheckout() {
@@ -826,6 +836,24 @@ function App() {
             FOTODECK
           </button>
 
+          {view === 'landing' && (
+            <button
+              type="button"
+              onClick={handleSecretAdminOpen}
+              aria-label="Admin access"
+              title=""
+              style={{
+                width: '9px',
+                height: '9px',
+                padding: 0,
+                border: 0,
+                borderRadius: '999px',
+                background: 'rgba(34, 34, 34, 0.22)',
+                cursor: 'pointer',
+              }}
+            />
+          )}
+
           {isStudioView && (
             <nav className="deck-nav" aria-label="View selector">
               <button type="button" onClick={() => setView('studio')}>
@@ -864,31 +892,15 @@ function App() {
 
         {view === 'landing' && (
           <section className="collection-view">
-            <div className="collection-heading">
-              <div>
-                <p className="soft-label">
-                  FOTODECK
-                </p>
-
-                <h1 style={{ fontSize: '1.45rem', lineHeight: '1.1', letterSpacing: '-0.03em' }}>
-                  Sell event photos without the mess.
-                </h1>
-
-                <p style={{ marginTop: '12px', maxWidth: '680px', lineHeight: '1.45' }}>
-                  Create a fast public photo collection, let buyers choose the images they want, and send them straight to checkout.
-                </p>
-              </div>
-            </div>
-
-            <section className="studio-panel">
-              <div className="preview-heading">
+            <section className="studio-panel" style={{ textAlign: 'center' }}>
+              <div className="preview-heading" style={{ justifyContent: 'center' }}>
                 <div>
                   <p className="soft-label">
-                    Start
+                    FOTODECK
                   </p>
 
-                  <h1 style={smallHeadingStyle}>
-                    Start your FOTODECK
+                  <h1 style={{ fontSize: '1.45rem', lineHeight: '1.1', letterSpacing: '-0.03em' }}>
+                    Sell event photos without the mess.
                   </h1>
                 </div>
               </div>
@@ -924,19 +936,9 @@ function App() {
                       onChange={(event) => setSignupPhone(event.target.value)}
                     />
                   </label>
-
-                  <label>
-                    Preferred public address
-                    <input
-                      type="text"
-                      value={signupAddress}
-                      placeholder="northside"
-                      onChange={(event) => setSignupAddress(event.target.value)}
-                    />
-                  </label>
                 </div>
 
-                <div className="photo-loader" style={{ marginTop: '16px' }}>
+                <div className="photo-loader" style={{ marginTop: '16px', justifyContent: 'center' }}>
                   <button className="dark-action" type="submit">
                     Start FOTODECK
                   </button>
@@ -944,9 +946,7 @@ function App() {
               </form>
 
               <div className="empty-photo-space">
-                <strong>{signupStatus || 'Simple photo collections. Clean buyer checkout. No gallery chaos.'}</strong>
-                <br />
-                <span>Public collection links open directly from the photographer.</span>
+                <strong>{signupStatus || 'Fast photo collections. Clean checkout. Simple delivery.'}</strong>
               </div>
             </section>
           </section>
