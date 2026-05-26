@@ -159,6 +159,36 @@ function App() {
       await handleLoadSavedCollectionsEvents()
     }
 
+    async function loadReturningVisitorFromStorage() {
+      if (window.location.pathname === '/view' || window.location.pathname === '/admin') {
+        return
+      }
+
+      const savedVisitor = window.localStorage.getItem('fotodeck_visitor')
+
+      if (!savedVisitor) {
+        return
+      }
+
+      try {
+        const visitor = JSON.parse(savedVisitor)
+
+        if (!visitor || !visitor.email || !visitor.phone) {
+          return
+        }
+
+        setSignupBusinessName(visitor.name || '')
+        setSignupEmail(visitor.email || '')
+        setSignupPhone(visitor.phone || '')
+        setSignupStatus('Welcome back. Opening Events...')
+        setView('public-collections')
+        window.history.replaceState({}, document.title, '/view')
+        await handleLoadSavedCollectionsEvents()
+      } catch {
+        window.localStorage.removeItem('fotodeck_visitor')
+      }
+    }
+
     if (window.location.pathname === '/view') {
       loadPublicViewFromUrl()
     }
@@ -166,6 +196,8 @@ function App() {
     if (window.location.pathname === '/admin') {
       loadStudioViewFromUrl()
     }
+
+    loadReturningVisitorFromStorage()
   }, [])
 
   function clearVisiblePhotosForNewTarget() {
