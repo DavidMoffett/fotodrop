@@ -2024,7 +2024,7 @@ function App() {
             {photos.length > 0 && (
               <>
                 <div className="customer-grid">
-                  {visiblePhotos.map((photo) => {
+                  {photos.map((photo) => {
                     const inCart = isPhotoInCart(photo)
 
                     return (
@@ -2057,20 +2057,6 @@ function App() {
                     )
                   })}
                 </div>
-
-                {hiddenPhotoCount > 0 && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'center',
-                      marginTop: '20px',
-                    }}
-                  >
-                    <button className="dark-action" type="button" onClick={handleLoadMorePhotos}>
-                      Load {Math.min(24, hiddenPhotoCount)} more photo{Math.min(24, hiddenPhotoCount) === 1 ? '' : 's'}
-                    </button>
-                  </div>
-                )}
               </>
             )}
 
