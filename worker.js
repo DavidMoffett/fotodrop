@@ -34,6 +34,16 @@ function makeMoneyAmount(cents) {
   return (Number(cents || 0) / 100).toFixed(2);
 }
 
+function makeDownloadFileName(fileName) {
+  const cleanName = safeFileName(fileName || "fotodeck-photo.jpg");
+
+  if (cleanName.includes(".")) {
+    return cleanName;
+  }
+
+  return `${cleanName}.jpg`;
+}
+
 async function ensureStripeTables(env) {
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS stripe_orders (
@@ -60,6 +70,78 @@ async function ensureStripeTables(env) {
       created_at TEXT NOT NULL
     )
   `).run();
+}
+
+async function getStripeSession(env, sessionId) {
+  const stripeResponse = await fetch(
+    `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`,
+    {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${env.STRIPE_SECRET_KEY}`
+      }
+    }
+  );
+
+  const stripeSession = await stripeResponse.json();
+
+  if (!stripeResponse.ok || !stripeSession || !stripeSession.id) {
+    const message = stripeSession && stripeSession.error && stripeSession.error.message
+      ? stripeSession.error.message
+      : "Stripe session could not be verified";
+
+    throw new Error(message);
+  }
+
+  return stripeSession;
+}
+
+async function getPaidOrderFromSession(env, sessionId) {
+  await ensureStripeTables(env);
+
+  const stripeSession = await getStripeSession(env, sessionId);
+
+  if (stripeSession.payment_status !== "paid") {
+    const error = new Error("Stripe session is not paid");
+    error.status = 402;
+    throw error;
+  }
+
+  const order = await env.DB.prepare(`
+    SELECT
+      id,
+      stripe_session_id,
+      collection_id,
+      event_id,
+      buyer_email,
+      amount_cents,
+      currency,
+      status,
+      created_at
+    FROM stripe_orders
+    WHERE stripe_session_id = ?
+  `).bind(sessionId).first();
+
+  if (!order) {
+    const error = new Error("Paid order was not found in FOTODECK");
+    error.status = 404;
+    throw error;
+  }
+
+  if (order.status !== "PAID") {
+    await env.DB.prepare(`
+      UPDATE stripe_orders
+      SET status = ?
+      WHERE id = ?
+    `).bind("PAID", order.id).run();
+
+    order.status = "PAID";
+  }
+
+  return {
+    order,
+    stripeSession
+  };
 }
 
 async function getCartImagesFromDb(env, collectionId, eventId, imageIds) {
@@ -328,6 +410,249 @@ async function handleStripeCreateCheckout(request, env) {
         checkedAt: new Date().toISOString()
       },
       500
+    );
+  }
+}
+
+async function handlePurchasedImages(request, env) {
+  if (request.method !== "GET") {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Purchased images",
+        error: "Use GET with sessionId"
+      },
+      405
+    );
+  }
+
+  if (!env.DB) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Purchased images",
+        error: "D1 binding DB is missing"
+      },
+      500
+    );
+  }
+
+  if (!env.STRIPE_SECRET_KEY) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Purchased images",
+        error: "Stripe secret key is missing"
+      },
+      500
+    );
+  }
+
+  try {
+    const url = new URL(request.url);
+    const sessionId = url.searchParams.get("sessionId");
+
+    if (!sessionId) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Purchased images",
+          error: "sessionId is required"
+        },
+        400
+      );
+    }
+
+    const paidOrder = await getPaidOrderFromSession(env, sessionId);
+    const order = paidOrder.order;
+
+    const itemsResult = await env.DB.prepare(`
+      SELECT
+        id,
+        order_id,
+        image_id,
+        file_name,
+        display_key,
+        price_cents,
+        created_at
+      FROM stripe_order_items
+      WHERE order_id = ?
+      ORDER BY created_at ASC
+    `).bind(order.id).all();
+
+    const items = itemsResult.results || [];
+
+    return jsonResponse({
+      ok: true,
+      app: "FOTODECK",
+      service: "Purchased images",
+      order: {
+        id: order.id,
+        stripe_session_id: order.stripe_session_id,
+        collection_id: order.collection_id,
+        event_id: order.event_id,
+        buyer_email: order.buyer_email,
+        amount_cents: order.amount_cents,
+        amount: makeMoneyAmount(order.amount_cents),
+        currency: order.currency,
+        status: "PAID",
+        photo_count: items.length,
+        created_at: order.created_at
+      },
+      images: items.map((item) => ({
+        image_id: item.image_id,
+        file_name: item.file_name,
+        price_cents: item.price_cents,
+        price: makeMoneyAmount(item.price_cents),
+        download_url: `/api/download-purchased-image?sessionId=${encodeURIComponent(sessionId)}&imageId=${encodeURIComponent(item.image_id)}`
+      })),
+      checkedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Purchased images",
+        error: error.message,
+        checkedAt: new Date().toISOString()
+      },
+      error.status || 500
+    );
+  }
+}
+
+async function handleDownloadPurchasedImage(request, env) {
+  if (request.method !== "GET") {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Download purchased image",
+        error: "Use GET with sessionId and imageId"
+      },
+      405
+    );
+  }
+
+  if (!env.DB) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Download purchased image",
+        error: "D1 binding DB is missing"
+      },
+      500
+    );
+  }
+
+  if (!env.DISPLAY_BUCKET) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Download purchased image",
+        error: "R2 binding DISPLAY_BUCKET is missing"
+      },
+      500
+    );
+  }
+
+  if (!env.STRIPE_SECRET_KEY) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Download purchased image",
+        error: "Stripe secret key is missing"
+      },
+      500
+    );
+  }
+
+  try {
+    const url = new URL(request.url);
+    const sessionId = url.searchParams.get("sessionId");
+    const imageId = url.searchParams.get("imageId");
+
+    if (!sessionId || !imageId) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Download purchased image",
+          error: "sessionId and imageId are required"
+        },
+        400
+      );
+    }
+
+    const paidOrder = await getPaidOrderFromSession(env, sessionId);
+    const order = paidOrder.order;
+
+    const item = await env.DB.prepare(`
+      SELECT
+        id,
+        order_id,
+        image_id,
+        file_name,
+        display_key,
+        price_cents,
+        created_at
+      FROM stripe_order_items
+      WHERE order_id = ?
+      AND image_id = ?
+    `).bind(order.id, imageId).first();
+
+    if (!item) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Download purchased image",
+          error: "Purchased image was not found for this paid order"
+        },
+        404
+      );
+    }
+
+    const object = await env.DISPLAY_BUCKET.get(item.display_key);
+
+    if (!object) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Download purchased image",
+          error: "Purchased image file was not found"
+        },
+        404
+      );
+    }
+
+    const headers = new Headers();
+
+    object.writeHttpMetadata(headers);
+    headers.set("etag", object.httpEtag);
+    headers.set("cache-control", "private, max-age=60");
+    headers.set("content-disposition", `attachment; filename="${makeDownloadFileName(item.file_name)}"`);
+
+    return new Response(object.body, { headers });
+  } catch (error) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Download purchased image",
+        error: error.message,
+        checkedAt: new Date().toISOString()
+      },
+      error.status || 500
     );
   }
 }
@@ -1326,6 +1651,14 @@ export default {
 
     if (url.pathname === "/api/stripe-create-checkout") {
       return handleStripeCreateCheckout(request, env);
+    }
+
+    if (url.pathname === "/api/purchased-images") {
+      return handlePurchasedImages(request, env);
+    }
+
+    if (url.pathname === "/api/download-purchased-image") {
+      return handleDownloadPurchasedImage(request, env);
     }
 
     if (env.ASSETS) {
