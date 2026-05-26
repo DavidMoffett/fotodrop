@@ -131,7 +131,7 @@ function App() {
       const stripeSessionId = params.get('session_id')
 
       if (stripeStatus === 'success' && stripeSessionId) {
-        setCartStatus('Payment complete. Preparing download access.')
+        setCartStatus('Payment successful. Download your purchased photos below.')
         setPurchasedSessionId(stripeSessionId)
         await handleLoadPurchasedImages(stripeSessionId)
       }
@@ -358,7 +358,7 @@ function App() {
     }
 
     setIsLoadingPurchasedImages(true)
-    setPurchasedStatus('Loading purchased downloads...')
+    setPurchasedStatus('Payment successful. Preparing your downloads...')
 
     try {
       const response = await fetch(`/api/purchased-images?sessionId=${encodeURIComponent(sessionId)}`)
@@ -376,11 +376,11 @@ function App() {
       setPurchasedImages(images)
       setPurchasedStatus(
         images.length === 0
-          ? 'Payment found, but no purchased images were returned'
-          : `Payment complete. ${images.length} download${images.length === 1 ? '' : 's'} ready.`
+          ? 'Payment successful, but no purchased images were returned yet'
+          : `Payment successful. ${images.length} purchased photo${images.length === 1 ? '' : 's'} ready to download below.`
       )
       setCartItems([])
-      setCartStatus('Payment complete. Download your purchased photos below.')
+      setCartStatus('Payment successful. Download your purchased photos below.')
       setIsLoadingPurchasedImages(false)
     } catch (error) {
       setPurchasedImages([])
@@ -1937,12 +1937,12 @@ function App() {
                 <div className="preview-heading" style={{ marginBottom: 0 }}>
                   <div>
                     <p className="soft-label">
-                      Paid downloads
+                      Payment successful
                     </p>
                     <h1 style={smallHeadingStyle}>
                       {purchasedImages.length === 0
-                        ? 'Preparing downloads'
-                        : `${purchasedImages.length} download${purchasedImages.length === 1 ? '' : 's'} ready`}
+                        ? 'Preparing your purchased photos'
+                        : 'Your purchased photos are ready'}
                     </h1>
                   </div>
 
@@ -1957,7 +1957,9 @@ function App() {
                 </div>
 
                 <div className="empty-photo-space" style={{ marginTop: '12px' }}>
-                  <strong>{purchasedStatus || 'Checking payment...'}</strong>
+                  <strong>{purchasedStatus || 'Payment successful. Checking your purchased photos...'}</strong>
+                  <br />
+                  <span>Download your photos below.</span>
 
                   {purchasedImages.length > 0 && (
                     <div style={{ width: '100%', display: 'grid', gap: '10px', marginTop: '14px' }}>
@@ -2088,6 +2090,12 @@ function App() {
                 <button className="dark-action" type="button" onClick={handleCartCheckout} disabled={isCheckingOut}>
                   {isCheckingOut ? 'Opening Checkout...' : 'Pay by Card'}
                 </button>
+              </div>
+
+              <div className="empty-photo-space" style={{ marginTop: '12px', marginBottom: '12px' }}>
+                <strong>Want more than one photo?</strong>
+                <br />
+                <span>Keep browsing and tap Add on any photo you want. Pay once when you are ready.</span>
               </div>
 
               <div className="studio-fields">
