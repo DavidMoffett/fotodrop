@@ -2003,13 +2003,27 @@ function App() {
                   </h1>
                 </div>
 
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                  <button type="button" onClick={handleBackToEvents}>
-                    Back to Events
-                  </button>
-
+                <div
+                  style={{
+                    display: 'grid',
+                    gap: '14px',
+                    justifyItems: 'center',
+                    width: '100%',
+                  }}
+                >
                   <button className="dark-action" type="button" onClick={handleScrollToCheckout} disabled={isCheckingOut}>
                     Checkout
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleBackToEvents}
+                    style={{
+                      borderRadius: '999px',
+                      padding: '10px 16px',
+                    }}
+                  >
+                    Back to Events
                   </button>
                 </div>
               </div>
@@ -2122,6 +2136,42 @@ function App() {
                 )}
               </div>
             </section>
+
+            {cartItems.length > 0 && (
+              <div
+                style={{
+                  position: 'fixed',
+                  left: '50%',
+                  bottom: '14px',
+                  transform: 'translateX(-50%)',
+                  width: 'calc(100% - 28px)',
+                  maxWidth: '520px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  padding: '10px 12px',
+                  borderRadius: '999px',
+                  background: 'rgba(255, 255, 255, 0.94)',
+                  boxShadow: '0 18px 44px rgba(17, 24, 39, 0.22)',
+                  zIndex: 30,
+                }}
+              >
+                <strong
+                  style={{
+                    fontSize: '0.9rem',
+                    color: '#111827',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {cartItems.length} selected / NZ${cartTotal.toFixed(2)}
+                </strong>
+
+                <button className="dark-action" type="button" onClick={handleScrollToCheckout} disabled={isCheckingOut}>
+                  Checkout
+                </button>
+              </div>
+            )}
           </section>
         )}
 
