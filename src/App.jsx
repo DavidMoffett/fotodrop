@@ -112,6 +112,10 @@ function App() {
   const [collectionEditWatermark, setCollectionEditWatermark] = useState('FOTODECK')
   const [collectionEditStatus, setCollectionEditStatus] = useState('No collection edit yet')
   const [isSavingCollectionEdit, setIsSavingCollectionEdit] = useState(false)
+  const [purchasedSessionId, setPurchasedSessionId] = useState('')
+  const [purchasedImages, setPurchasedImages] = useState([])
+  const [purchasedStatus, setPurchasedStatus] = useState('')
+  const [isLoadingPurchasedImages, setIsLoadingPurchasedImages] = useState(false)
   const [signupBusinessName, setSignupBusinessName] = useState('')
   const [signupEmail, setSignupEmail] = useState('')
   const [signupPhone, setSignupPhone] = useState('')
@@ -127,10 +131,15 @@ function App() {
 
       if (stripeStatus === 'success' && stripeSessionId) {
         setCartStatus('Payment complete. Preparing download access.')
+        setPurchasedSessionId(stripeSessionId)
+        await handleLoadPurchasedImages(stripeSessionId)
       }
 
       if (stripeStatus === 'cancel') {
         setCartStatus('Payment cancelled. Your selected photos were not purchased.')
+        setPurchasedStatus('')
+        setPurchasedImages([])
+        setPurchasedSessionId('')
       }
 
       if (!collectionId || !eventId) {
@@ -169,6 +178,10 @@ function App() {
     setCartStatus('Cart is empty')
     setIsCheckingOut(false)
     setPriceStatus('No price edit yet')
+    setPurchasedSessionId('')
+    setPurchasedImages([])
+    setPurchasedStatus('')
+    setIsLoadingPurchasedImages(false)
   }
 
   function clearCollectionEditState() {
@@ -332,6 +345,46 @@ function App() {
 
     if (answer && answer.trim().toLowerCase() === 'funga safari') {
       window.location.href = '/admin'
+    }
+  }
+
+  async function handleLoadPurchasedImages(sessionIdOverride) {
+    const sessionId = sessionIdOverride || purchasedSessionId
+
+    if (!sessionId) {
+      setPurchasedStatus('No paid Stripe session found')
+      return
+    }
+
+    setIsLoadingPurchasedImages(true)
+    setPurchasedStatus('Loading purchased downloads...')
+
+    try {
+      const response = await fetch(`/api/purchased-images?sessionId=${encodeURIComponent(sessionId)}`)
+      const result = await response.json()
+
+      if (!response.ok || !result.ok) {
+        setPurchasedImages([])
+        setPurchasedStatus(result.error || 'Purchased downloads could not be loaded')
+        setIsLoadingPurchasedImages(false)
+        return
+      }
+
+      const images = result.images || []
+
+      setPurchasedImages(images)
+      setPurchasedStatus(
+        images.length === 0
+          ? 'Payment found, but no purchased images were returned'
+          : `Payment complete. ${images.length} download${images.length === 1 ? '' : 's'} ready.`
+      )
+      setCartItems([])
+      setCartStatus('Payment complete. Download your purchased photos below.')
+      setIsLoadingPurchasedImages(false)
+    } catch (error) {
+      setPurchasedImages([])
+      setPurchasedStatus(error.message || 'Purchased downloads could not be loaded')
+      setIsLoadingPurchasedImages(false)
     }
   }
 
@@ -1026,6 +1079,10 @@ function App() {
     setIsCheckingOut(false)
     setPriceStatus('No price edit yet')
     setIsUpdatingPrice(false)
+    setPurchasedSessionId('')
+    setPurchasedImages([])
+    setPurchasedStatus('')
+    setIsLoadingPurchasedImages(false)
     clearCollectionEditState()
   }
 
@@ -1793,6 +1850,64 @@ function App() {
                 {cartItems.length} selected / NZ${cartTotal.toFixed(2)}
               </div>
             </div>
+
+            {purchasedSessionId && (
+              <section className="studio-preview" style={{ marginBottom: '18px' }}>
+                <div className="preview-heading" style={{ marginBottom: 0 }}>
+                  <div>
+                    <p className="soft-label">
+                      Paid downloads
+                    </p>
+                    <h1 style={smallHeadingStyle}>
+                      {purchasedImages.length === 0
+                        ? 'Preparing downloads'
+                        : `${purchasedImages.length} download${purchasedImages.length === 1 ? '' : 's'} ready`}
+                    </h1>
+                  </div>
+
+                  <button
+                    className="dark-action"
+                    type="button"
+                    onClick={() => handleLoadPurchasedImages(purchasedSessionId)}
+                    disabled={isLoadingPurchasedImages}
+                  >
+                    {isLoadingPurchasedImages ? 'Checking...' : 'Refresh downloads'}
+                  </button>
+                </div>
+
+                <div className="empty-photo-space" style={{ marginTop: '12px' }}>
+                  <strong>{purchasedStatus || 'Checking payment...'}</strong>
+
+                  {purchasedImages.length > 0 && (
+                    <div style={{ width: '100%', display: 'grid', gap: '10px', marginTop: '14px' }}>
+                      {purchasedImages.map((image) => (
+                        <div
+                          key={image.image_id}
+                          className="buy-row"
+                          style={{
+                            width: '100%',
+                            borderRadius: '999px',
+                          }}
+                        >
+                          <span>{image.file_name}</span>
+                          <a
+                            className="dark-action"
+                            href={image.download_url}
+                            style={{
+                              textDecoration: 'none',
+                              padding: '8px 12px',
+                              fontSize: '0.8rem',
+                            }}
+                          >
+                            Download
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
 
             <section className="studio-preview" style={{ marginBottom: '18px' }}>
               <div className="preview-heading" style={{ marginBottom: 0 }}>
