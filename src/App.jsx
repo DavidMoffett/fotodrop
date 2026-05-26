@@ -100,6 +100,7 @@ function App() {
   const [deleteStatus, setDeleteStatus] = useState('No delete action yet')
   const [deletingPhotoId, setDeletingPhotoId] = useState('')
   const [deletingEventId, setDeletingEventId] = useState('')
+  const [deletingCollectionId, setDeletingCollectionId] = useState('')
   const [cartItems, setCartItems] = useState([])
   const [buyerEmail, setBuyerEmail] = useState('')
   const [cartStatus, setCartStatus] = useState('Cart is empty')
@@ -1036,6 +1037,77 @@ function App() {
     }
   }
 
+  async function handleDeleteCollection(collection) {
+    const firstConfirm = window.confirm(
+      `Delete this entire collection from FOTODECK?\n\nCollection: ${collection.name || 'Collection'}\nPhotos: ${collection.photo_count || 0}\n\nThis deletes the collection, all events inside it, all photos inside those events, and the saved display files.`
+    )
+
+    if (!firstConfirm) {
+      return
+    }
+
+    const typedConfirm = window.prompt(
+      `Final confirmation for deleting collection:\n\n${collection.name || 'Collection'}\n\nType DELETE COLLECTION to continue.`
+    )
+
+    if (typedConfirm !== 'DELETE COLLECTION') {
+      setDeleteStatus('Collection delete cancelled')
+      return
+    }
+
+    setDeletingCollectionId(collection.id)
+    setDeleteStatus(`Deleting collection ${collection.name || 'Collection'}...`)
+
+    try {
+      const response = await fetch('/api/delete-collection', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          collectionId: collection.id,
+          confirmText: 'DELETE COLLECTION',
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok || !result.ok) {
+        setDeleteStatus(result.error || `Could not delete collection ${collection.name || 'Collection'}`)
+        setDeletingCollectionId('')
+        return
+      }
+
+      setSavedCollections((currentCollections) => currentCollections.filter((item) => item.id !== collection.id))
+      setSavedEvents((currentEvents) => currentEvents.filter((item) => item.collection_id !== collection.id))
+
+      if (activeCollectionId === collection.id) {
+        setActiveCollectionId('')
+        setActiveEventId('')
+        setCollectionName('FOTODECK')
+        setEventName('Event')
+        setPhotos([])
+        setVisiblePhotoCount(24)
+        setSelectedPhoto(null)
+        setCartItems([])
+        setBuyerEmail('')
+        setCartStatus('Cart is empty')
+        setLoadStatus('Deleted collection removed from current view')
+      }
+
+      if (editingCollectionId === collection.id) {
+        clearCollectionEditState()
+      }
+
+      setDeleteStatus(`Deleted collection ${collection.name || 'Collection'}`)
+      setSavedStatus(`Deleted collection ${collection.name || 'Collection'}`)
+      setDeletingCollectionId('')
+    } catch (error) {
+      setDeleteStatus(error.message || `Could not delete collection ${collection.name || 'Collection'}`)
+      setDeletingCollectionId('')
+    }
+  }
+
   function handleDeleteEventButtonClick(clickEvent, collection, event) {
     clickEvent.preventDefault()
     clickEvent.stopPropagation()
@@ -1073,6 +1145,7 @@ function App() {
     setDeleteStatus('No delete action yet')
     setDeletingPhotoId('')
     setDeletingEventId('')
+    setDeletingCollectionId('')
     setCartItems([])
     setBuyerEmail('')
     setCartStatus('Cart is empty')
@@ -1695,9 +1768,17 @@ function App() {
                             <button
                               type="button"
                               onClick={() => handleEditCollection(collection)}
-                              disabled={isUploading || isSavingCollectionEdit}
+                              disabled={isUploading || isSavingCollectionEdit || deletingCollectionId === collection.id}
                             >
                               {editingCollectionId === collection.id ? 'Editing' : 'Edit Collection'}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCollection(collection)}
+                              disabled={isUploading || isSavingCollectionEdit || deletingCollectionId === collection.id}
+                            >
+                              {deletingCollectionId === collection.id ? 'Deleting...' : 'Delete Collection'}
                             </button>
                           </div>
                         </div>
@@ -1712,7 +1793,7 @@ function App() {
                           <div className="image-mosaic">
                             {collectionEvents.map((event) => (
                               <article className="mosaic-card" key={event.id}>
-                                <button type="button" onClick={() => handleSelectSavedEvent(collection, event)} disabled={isUploading || deletingEventId === event.id}>
+                                <button type="button" onClick={() => handleSelectSavedEvent(collection, event)} disabled={isUploading || deletingEventId === event.id || deletingCollectionId === collection.id}>
                                   <div className="empty-photo-space">
                                     <strong>{event.name}</strong>
                                     <br />
@@ -1727,7 +1808,7 @@ function App() {
                                   <button
                                     type="button"
                                     onClick={(clickEvent) => handleDeleteEventButtonClick(clickEvent, collection, event)}
-                                    disabled={isUploading || deletingEventId === event.id}
+                                    disabled={isUploading || deletingEventId === event.id || deletingCollectionId === collection.id}
                                   >
                                     {deletingEventId === event.id ? 'Deleting...' : 'Delete Event'}
                                   </button>
