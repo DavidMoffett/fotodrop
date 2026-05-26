@@ -1510,6 +1510,175 @@ async function handleDeleteEvent(request, env) {
   }
 }
 
+async function handleDeleteCollection(request, env) {
+  if (request.method !== "POST") {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Delete collection",
+        error: "Use POST with collectionId and confirmText"
+      },
+      405
+    );
+  }
+
+  if (!env.DB) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Delete collection",
+        error: "D1 binding DB is missing"
+      },
+      500
+    );
+  }
+
+  if (!env.DISPLAY_BUCKET) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Delete collection",
+        error: "R2 binding DISPLAY_BUCKET is missing"
+      },
+      500
+    );
+  }
+
+  try {
+    const body = await request.json();
+
+    const collectionId = body && body.collectionId ? String(body.collectionId).trim() : "";
+    const confirmText = body && body.confirmText ? String(body.confirmText).trim() : "";
+
+    if (!collectionId) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Delete collection",
+          error: "collectionId is required"
+        },
+        400
+      );
+    }
+
+    if (confirmText !== "DELETE COLLECTION") {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Delete collection",
+          error: "confirmText must be DELETE COLLECTION"
+        },
+        400
+      );
+    }
+
+    const collection = await env.DB.prepare(`
+      SELECT
+        id,
+        name
+      FROM collections
+      WHERE id = ?
+    `).bind(collectionId).first();
+
+    if (!collection) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Delete collection",
+          error: "Collection was not found",
+          collectionId
+        },
+        404
+      );
+    }
+
+    const imagesResult = await env.DB.prepare(`
+      SELECT
+        id,
+        file_name,
+        display_key,
+        event_id
+      FROM images
+      WHERE collection_id = ?
+    `).bind(collectionId).all();
+
+    const eventsResult = await env.DB.prepare(`
+      SELECT
+        id,
+        name
+      FROM events
+      WHERE collection_id = ?
+    `).bind(collectionId).all();
+
+    const images = imagesResult.results || [];
+    const events = eventsResult.results || [];
+
+    let deletedFileCount = 0;
+    let missingFileCount = 0;
+
+    for (const image of images) {
+      if (image.display_key) {
+        const object = await env.DISPLAY_BUCKET.get(image.display_key);
+
+        if (object) {
+          await env.DISPLAY_BUCKET.delete(image.display_key);
+          deletedFileCount += 1;
+        } else {
+          missingFileCount += 1;
+        }
+      }
+    }
+
+    await env.DB.prepare(`
+      DELETE FROM images
+      WHERE collection_id = ?
+    `).bind(collectionId).run();
+
+    await env.DB.prepare(`
+      DELETE FROM events
+      WHERE collection_id = ?
+    `).bind(collectionId).run();
+
+    await env.DB.prepare(`
+      DELETE FROM collections
+      WHERE id = ?
+    `).bind(collectionId).run();
+
+    return jsonResponse({
+      ok: true,
+      app: "FOTODECK",
+      service: "Delete collection",
+      deleted: {
+        collection_id: collectionId,
+        collection_name: collection.name,
+        event_count: events.length,
+        photo_count: images.length,
+        r2_files_deleted: deletedFileCount,
+        r2_files_missing: missingFileCount
+      },
+      note: "Stripe order history was not deleted.",
+      checkedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Delete collection",
+        error: error.message,
+        checkedAt: new Date().toISOString()
+      },
+      500
+    );
+  }
+}
+
 async function handleUpdateEventPrice(request, env) {
   if (request.method !== "POST") {
     return jsonResponse(
@@ -1643,6 +1812,10 @@ export default {
 
     if (url.pathname === "/api/delete-event") {
       return handleDeleteEvent(request, env);
+    }
+
+    if (url.pathname === "/api/delete-collection") {
+      return handleDeleteCollection(request, env);
     }
 
     if (url.pathname === "/api/update-event-price") {
