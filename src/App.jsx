@@ -2287,10 +2287,36 @@ function App() {
                 </button>
               </div>
 
-              <div className="empty-photo-space" style={{ marginTop: '12px', marginBottom: '12px' }}>
-                <strong>Want more than one photo?</strong>
+               <div
+                className="empty-photo-space"
+                style={{
+                  marginTop: '12px',
+                  marginBottom: '12px',
+                  border: '2px solid #dc2626',
+                  background: '#fff1f2',
+                  color: '#991b1b',
+                  textAlign: 'left',
+                }}
+              >
+                <strong style={{ color: '#dc2626', fontSize: '1rem' }}>IMPORTANT NOTICE</strong>
                 <br />
-                <span>Keep browsing and tap Add on any photo you want. Pay once when you are ready.</span>
+                <br />
+                <span style={{ color: '#991b1b' }}>
+                  After card payment, FOTODECK will bring you back to this site. Do not close the browser.
+                </span>
+                <br />
+                <span style={{ color: '#991b1b' }}>
+                  Your download buttons will appear on the payment-success screen. Tap Download beside each purchased photo.
+                </span>
+                <br />
+                <span style={{ color: '#991b1b' }}>
+                  Download links are not automatically emailed yet.
+                </span>
+                <br />
+                <br />
+                <strong style={{ color: '#991b1b' }}>Want more than one photo?</strong>
+                <br />
+                <span style={{ color: '#991b1b' }}>Keep browsing and tap Add on any photo you want. Pay once when you are ready.</span>
               </div>
 
               <div className="studio-fields">
