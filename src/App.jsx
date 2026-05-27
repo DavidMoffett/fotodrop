@@ -78,6 +78,8 @@ function getInitialView() {
 
 function App() {
   const checkoutRef = useRef(null)
+  const uploadCancelRef = useRef(false)
+  const uploadControllersRef = useRef([])
 
   const [view, setView] = useState(getInitialView)
   const [collectionName, setCollectionName] = useState('FOTODECK')
@@ -669,6 +671,72 @@ function App() {
     }
   }
 
+  function handleCancelUpload() {
+    uploadCancelRef.current = true
+    uploadControllersRef.current.forEach((controller) => {
+      controller.abort()
+    })
+    uploadControllersRef.current = []
+    setUploadStatus('Cancelling upload...')
+  }
+
+  function makeDisplayFileName(fileName) {
+    const cleanName = String(fileName || 'fotodeck-display.jpg')
+      .trim()
+      .replace(/\.[^.]+$/, '')
+      .replace(/[^a-zA-Z0-9._-]/g, '-')
+      .replace(/-+/g, '-')
+      .toLowerCase()
+
+    return `${cleanName || 'fotodeck-display'}-display.jpg`
+  }
+
+  async function makeDisplayImageFile(file) {
+    const maxEdge = 1800
+    const jpegQuality = 0.78
+
+    if (!file || !file.type || !file.type.startsWith('image/')) {
+      return file
+    }
+
+    try {
+      const imageBitmap = await createImageBitmap(file)
+      const longestEdge = Math.max(imageBitmap.width, imageBitmap.height)
+      const scale = longestEdge > maxEdge ? maxEdge / longestEdge : 1
+      const nextWidth = Math.max(1, Math.round(imageBitmap.width * scale))
+      const nextHeight = Math.max(1, Math.round(imageBitmap.height * scale))
+      const canvas = document.createElement('canvas')
+
+      canvas.width = nextWidth
+      canvas.height = nextHeight
+
+      const context = canvas.getContext('2d')
+
+      if (!context) {
+        imageBitmap.close()
+        return file
+      }
+
+      context.drawImage(imageBitmap, 0, 0, nextWidth, nextHeight)
+      imageBitmap.close()
+
+      const blob = await new Promise((resolve) => {
+        canvas.toBlob(resolve, 'image/jpeg', jpegQuality)
+      })
+
+      if (!blob) {
+        return file
+      }
+
+      return new File([blob], makeDisplayFileName(file.name), {
+        type: 'image/jpeg',
+        lastModified: file.lastModified || Date.now(),
+      })
+    } catch {
+      return file
+    }
+  }
+
   async function handlePhotoSelection(event) {
     const files = Array.from(event.target.files || [])
 
@@ -676,6 +744,15 @@ function App() {
       return
     }
 
+    const collectionId = getCurrentCollectionId()
+    const eventId = getCurrentEventId()
+    const uploadBatchSize = 3
+    const uploadTimeoutMs = 180000
+    const uploadedPhotos = []
+    const failedUploads = []
+
+    uploadCancelRef.current = false
+    uploadControllersRef.current = []
     setPhotos([])
     setVisiblePhotoCount(24)
     setSelectedPhoto(null)
@@ -686,61 +763,116 @@ function App() {
     setUploadProgress({
       total: files.length,
       completed: 0,
+      failed: 0,
       currentFile: files[0]?.name || '',
     })
-    setUploadStatus(`Uploading 0 of ${files.length} photo${files.length === 1 ? '' : 's'}...`)
+    setUploadStatus(`Preparing ${files.length} photo${files.length === 1 ? '' : 's'} for upload...`)
 
-    const collectionId = getCurrentCollectionId()
-    const eventId = getCurrentEventId()
-    const uploadedPhotos = []
+    async function uploadSinglePhoto(file, index) {
+      const controller = new AbortController()
+      const timeoutId = window.setTimeout(() => {
+        controller.abort()
+      }, uploadTimeoutMs)
 
-    for (let index = 0; index < files.length; index += 1) {
-      const file = files[index]
+      uploadControllersRef.current = [...uploadControllersRef.current, controller]
 
-      setUploadProgress({
-        total: files.length,
-        completed: index,
-        currentFile: file.name || `Photo ${index + 1}`,
-      })
-      setUploadStatus(`Uploading ${index + 1} of ${files.length}: ${file.name || `Photo ${index + 1}`}`)
+      try {
+        const displayFile = await makeDisplayImageFile(file)
+        const formData = new FormData()
 
-      const formData = new FormData()
+        formData.append('displayFile', displayFile)
+        formData.append('deliveryFile', file)
+        formData.append('collectionId', collectionId)
+        formData.append('collectionName', collectionName || 'FOTODECK')
+        formData.append('eventId', eventId)
+        formData.append('eventName', eventName || 'Event')
+        formData.append('watermarkText', watermarkText || 'FOTODECK')
+        formData.append('price', singlePhotoPrice || '0')
 
-      formData.append('file', file)
-      formData.append('collectionId', collectionId)
-      formData.append('collectionName', collectionName || 'FOTODECK')
-      formData.append('eventId', eventId)
-      formData.append('eventName', eventName || 'Event')
-      formData.append('watermarkText', watermarkText || 'FOTODECK')
-      formData.append('price', singlePhotoPrice || '0')
-
-      const response = await fetch('/api/upload-display', {
-        method: 'POST',
-        body: formData,
-      })
-
-      const result = await response.json()
-
-      if (!response.ok || !result.ok || !result.image) {
-        setIsUploading(false)
-        setUploadProgress({
-          total: files.length,
-          completed: uploadedPhotos.length,
-          currentFile: file.name || `Photo ${index + 1}`,
+        const response = await fetch('/api/upload-display', {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
         })
-        setUploadStatus(result.error || `Upload failed on ${file.name || `photo ${index + 1}`}`)
-        event.target.value = ''
-        return
+
+        const result = await response.json()
+
+        if (!response.ok || !result.ok || !result.image) {
+          return {
+            ok: false,
+            fileName: file.name || `Photo ${index + 1}`,
+            error: result.error || `Upload failed on ${file.name || `photo ${index + 1}`}`,
+          }
+        }
+
+        return {
+          ok: true,
+          photo: mapSavedPhotoToPhoto(result.image),
+          fileName: file.name || `Photo ${index + 1}`,
+          displaySize: displayFile.size || 0,
+          deliverySize: file.size || 0,
+        }
+      } catch (error) {
+        return {
+          ok: false,
+          fileName: file.name || `Photo ${index + 1}`,
+          error:
+            error.name === 'AbortError'
+              ? `Upload cancelled or timed out for ${file.name || `photo ${index + 1}`}`
+              : error.message || `Upload failed on ${file.name || `photo ${index + 1}`}`,
+        }
+      } finally {
+        window.clearTimeout(timeoutId)
+        uploadControllersRef.current = uploadControllersRef.current.filter((item) => item !== controller)
+      }
+    }
+
+    for (let index = 0; index < files.length; index += uploadBatchSize) {
+      if (uploadCancelRef.current) {
+        break
       }
 
-      uploadedPhotos.push(mapSavedPhotoToPhoto(result.image))
+      const batchFiles = files.slice(index, index + uploadBatchSize)
+      const firstBatchNumber = index + 1
+      const lastBatchNumber = index + batchFiles.length
 
       setUploadProgress({
         total: files.length,
-        completed: index + 1,
-        currentFile: file.name || `Photo ${index + 1}`,
+        completed: uploadedPhotos.length,
+        failed: failedUploads.length,
+        currentFile: `${firstBatchNumber}-${lastBatchNumber} of ${files.length}`,
       })
-      setUploadStatus(`Uploaded ${index + 1} of ${files.length}`)
+      setUploadStatus(`Compressing display files and uploading ${firstBatchNumber}-${lastBatchNumber} of ${files.length}...`)
+
+      const batchResults = await Promise.all(
+        batchFiles.map((file, batchIndex) => uploadSinglePhoto(file, index + batchIndex))
+      )
+
+      batchResults.forEach((result) => {
+        if (result.ok) {
+          uploadedPhotos.push(result.photo)
+        } else if (!uploadCancelRef.current) {
+          failedUploads.push(result)
+        }
+      })
+
+      const sortedUploadedPhotos = sortPhotosFirstFirst(uploadedPhotos)
+      const nextStart = lastBatchNumber + 1
+      const nextEnd = Math.min(lastBatchNumber + uploadBatchSize, files.length)
+
+      setPhotos(sortedUploadedPhotos)
+      setVisiblePhotoCount(24)
+      setUploadProgress({
+        total: files.length,
+        completed: uploadedPhotos.length,
+        failed: failedUploads.length,
+        currentFile: nextStart <= files.length ? `${nextStart}-${nextEnd} of ${files.length}` : '',
+      })
+      setUploadStatus(
+        failedUploads.length === 0
+          ? `Uploaded ${uploadedPhotos.length} of ${files.length}`
+          : `Uploaded ${uploadedPhotos.length} of ${files.length}. ${failedUploads.length} failed.`
+      )
     }
 
     const sortedUploadedPhotos = sortPhotosFirstFirst(uploadedPhotos)
@@ -751,10 +883,29 @@ function App() {
     setUploadProgress({
       total: files.length,
       completed: sortedUploadedPhotos.length,
+      failed: failedUploads.length,
       currentFile: '',
     })
-    setUploadStatus(`Uploaded ${sortedUploadedPhotos.length} photo${sortedUploadedPhotos.length === 1 ? '' : 's'}`)
+
+    if (uploadCancelRef.current) {
+      setUploadStatus(
+        failedUploads.length === 0
+          ? `Upload cancelled. ${sortedUploadedPhotos.length} photo${sortedUploadedPhotos.length === 1 ? '' : 's'} uploaded before cancel.`
+          : `Upload cancelled. ${sortedUploadedPhotos.length} uploaded, ${failedUploads.length} failed.`
+      )
+    } else if (failedUploads.length > 0) {
+      const failedNames = failedUploads.map((item) => item.fileName).join(', ')
+
+      setUploadStatus(
+        `Uploaded ${sortedUploadedPhotos.length} of ${files.length}. Failed: ${failedNames}`
+      )
+    } else {
+      setUploadStatus(`Uploaded ${sortedUploadedPhotos.length} photo${sortedUploadedPhotos.length === 1 ? '' : 's'}`)
+    }
+
     setLoadStatus(`${sortedUploadedPhotos.length} photo${sortedUploadedPhotos.length === 1 ? '' : 's'} shown for this event`)
+    uploadControllersRef.current = []
+    uploadCancelRef.current = false
     event.target.value = ''
   }
 
@@ -1685,6 +1836,12 @@ function App() {
                 <button className="photo-loader-button" type="button" onClick={() => handleLoadSavedPhotos()} disabled={isUploading}>
                   Load current event
                 </button>
+
+                {isUploading && (
+                  <button className="photo-loader-button" type="button" onClick={handleCancelUpload}>
+                    Cancel upload
+                  </button>
+                )}
               </div>
             </section>
 
@@ -1876,6 +2033,12 @@ function App() {
                     <span>
                       {uploadProgress.completed} of {uploadProgress.total} complete
                     </span>
+                    {uploadProgress.failed > 0 && (
+                      <>
+                        <br />
+                        <span>{uploadProgress.failed} failed</span>
+                      </>
+                    )}
                     {uploadProgress.currentFile && (
                       <>
                         <br />
