@@ -44,6 +44,60 @@ function makeDownloadFileName(fileName) {
   return `${cleanName}.jpg`;
 }
 
+async function ensureColumn(env, tableName, columnName, columnDefinition) {
+  try {
+    await env.DB.prepare(`
+      ALTER TABLE ${tableName}
+      ADD COLUMN ${columnName} ${columnDefinition}
+    `).run();
+  } catch (error) {
+    const message = String(error && error.message ? error.message : "");
+
+    if (
+      message.includes("duplicate column name") ||
+      message.includes("already exists")
+    ) {
+      return;
+    }
+
+    throw error;
+  }
+}
+
+async function ensureCoreTables(env) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS collections (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )
+  `).run();
+
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS events (
+      id TEXT PRIMARY KEY,
+      collection_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )
+  `).run();
+
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS images (
+      id TEXT PRIMARY KEY,
+      collection_id TEXT NOT NULL,
+      event_id TEXT NOT NULL,
+      file_name TEXT NOT NULL,
+      display_key TEXT NOT NULL,
+      watermark_text TEXT,
+      price_cents INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    )
+  `).run();
+
+  await ensureColumn(env, "images", "delivery_key", "TEXT");
+}
+
 async function ensureStripeTables(env) {
   await env.DB.prepare(`
     CREATE TABLE IF NOT EXISTS stripe_orders (
@@ -70,6 +124,8 @@ async function ensureStripeTables(env) {
       created_at TEXT NOT NULL
     )
   `).run();
+
+  await ensureColumn(env, "stripe_order_items", "delivery_key", "TEXT");
 }
 
 async function getStripeSession(env, sessionId) {
@@ -145,6 +201,8 @@ async function getPaidOrderFromSession(env, sessionId) {
 }
 
 async function getCartImagesFromDb(env, collectionId, eventId, imageIds) {
+  await ensureCoreTables(env);
+
   const cleanImageIds = Array.from(new Set(
     (imageIds || [])
       .map((id) => String(id || "").trim())
@@ -166,6 +224,7 @@ async function getCartImagesFromDb(env, collectionId, eventId, imageIds) {
       images.id,
       images.file_name,
       images.display_key,
+      images.delivery_key,
       images.price_cents,
       images.collection_id,
       images.event_id,
@@ -368,16 +427,18 @@ async function handleStripeCreateCheckout(request, env) {
           image_id,
           file_name,
           display_key,
+          delivery_key,
           price_cents,
           created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         crypto.randomUUID(),
         localOrderId,
         image.id,
         image.file_name,
         image.display_key,
+        image.delivery_key || image.display_key,
         Number(image.price_cents || 0),
         checkedAt
       ).run();
@@ -467,6 +528,8 @@ async function handlePurchasedImages(request, env) {
       );
     }
 
+    await ensureStripeTables(env);
+
     const paidOrder = await getPaidOrderFromSession(env, sessionId);
     const order = paidOrder.order;
 
@@ -477,6 +540,7 @@ async function handlePurchasedImages(request, env) {
         image_id,
         file_name,
         display_key,
+        delivery_key,
         price_cents,
         created_at
       FROM stripe_order_items
@@ -592,6 +656,8 @@ async function handleDownloadPurchasedImage(request, env) {
       );
     }
 
+    await ensureStripeTables(env);
+
     const paidOrder = await getPaidOrderFromSession(env, sessionId);
     const order = paidOrder.order;
 
@@ -602,6 +668,7 @@ async function handleDownloadPurchasedImage(request, env) {
         image_id,
         file_name,
         display_key,
+        delivery_key,
         price_cents,
         created_at
       FROM stripe_order_items
@@ -621,7 +688,8 @@ async function handleDownloadPurchasedImage(request, env) {
       );
     }
 
-    const object = await env.DISPLAY_BUCKET.get(item.display_key);
+    const deliveryKey = item.delivery_key || item.display_key;
+    const object = await env.DISPLAY_BUCKET.get(deliveryKey);
 
     if (!object) {
       return jsonResponse(
@@ -683,6 +751,8 @@ async function handleImages(request, env) {
   }
 
   try {
+    await ensureCoreTables(env);
+
     const url = new URL(request.url);
     const collectionId = url.searchParams.get("collectionId");
     const eventId = url.searchParams.get("eventId");
@@ -692,6 +762,7 @@ async function handleImages(request, env) {
         images.id,
         images.file_name,
         images.display_key,
+        images.delivery_key,
         images.watermark_text,
         images.price_cents,
         images.event_id,
@@ -778,35 +849,7 @@ async function handleCollectionsEvents(request, env) {
   }
 
   try {
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS collections (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      )
-    `).run();
-
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS events (
-        id TEXT PRIMARY KEY,
-        collection_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      )
-    `).run();
-
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS images (
-        id TEXT PRIMARY KEY,
-        collection_id TEXT NOT NULL,
-        event_id TEXT NOT NULL,
-        file_name TEXT NOT NULL,
-        display_key TEXT NOT NULL,
-        watermark_text TEXT,
-        price_cents INTEGER NOT NULL,
-        created_at TEXT NOT NULL
-      )
-    `).run();
+    await ensureCoreTables(env);
 
     const collectionsResult = await env.DB.prepare(`
       SELECT
@@ -886,6 +929,8 @@ async function handleUpdateCollection(request, env) {
   }
 
   try {
+    await ensureCoreTables(env);
+
     const body = await request.json();
 
     const collectionId = body && body.collectionId ? String(body.collectionId).trim() : "";
@@ -1067,7 +1112,7 @@ async function handleUploadDisplay(request, env) {
         ok: false,
         app: "FOTODECK",
         service: "Display photo upload",
-        error: "Use POST with one photo file"
+        error: "Use POST with photo files"
       },
       405
     );
@@ -1098,30 +1143,58 @@ async function handleUploadDisplay(request, env) {
   }
 
   try {
-    const formData = await request.formData();
-    const file = formData.get("file");
+    await ensureCoreTables(env);
 
-    if (!file || typeof file.arrayBuffer !== "function") {
+    const formData = await request.formData();
+    const displayFile = formData.get("displayFile") || formData.get("file");
+    const deliveryFile = formData.get("deliveryFile") || displayFile;
+
+    if (!displayFile || typeof displayFile.arrayBuffer !== "function") {
       return jsonResponse(
         {
           ok: false,
           app: "FOTODECK",
           service: "Display photo upload",
-          error: "No photo file was provided"
+          error: "No display photo file was provided"
         },
         400
       );
     }
 
-    const contentType = file.type || "application/octet-stream";
-
-    if (!contentType.startsWith("image/")) {
+    if (!deliveryFile || typeof deliveryFile.arrayBuffer !== "function") {
       return jsonResponse(
         {
           ok: false,
           app: "FOTODECK",
           service: "Display photo upload",
-          error: "Uploaded file must be an image"
+          error: "No delivery photo file was provided"
+        },
+        400
+      );
+    }
+
+    const displayContentType = displayFile.type || "application/octet-stream";
+    const deliveryContentType = deliveryFile.type || displayContentType || "application/octet-stream";
+
+    if (!displayContentType.startsWith("image/")) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Display photo upload",
+          error: "Display file must be an image"
+        },
+        400
+      );
+    }
+
+    if (!deliveryContentType.startsWith("image/")) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Display photo upload",
+          error: "Delivery file must be an image"
         },
         400
       );
@@ -1137,45 +1210,34 @@ async function handleUploadDisplay(request, env) {
     const priceCents = centsFromPrice(formData.get("price"));
 
     const imageId = crypto.randomUUID();
-    const originalName = safeFileName(file.name);
-    const displayKey = `display/${collectionId}/${eventId}/${imageId}-${originalName}`;
-    const fileBuffer = await file.arrayBuffer();
+    const originalName = safeFileName(deliveryFile.name || displayFile.name);
+    const displayName = safeFileName(displayFile.name || originalName);
+    const displayKey = `display/${collectionId}/${eventId}/${imageId}-${displayName}`;
+    const deliveryKey = `delivery/${collectionId}/${eventId}/${imageId}-${originalName}`;
 
-    await env.DISPLAY_BUCKET.put(displayKey, fileBuffer, {
+    const displayBuffer = await displayFile.arrayBuffer();
+
+    await env.DISPLAY_BUCKET.put(displayKey, displayBuffer, {
       httpMetadata: {
-        contentType
+        contentType: displayContentType
       }
     });
 
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS collections (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      )
-    `).run();
+    if (deliveryFile === displayFile) {
+      await env.DISPLAY_BUCKET.put(deliveryKey, displayBuffer, {
+        httpMetadata: {
+          contentType: deliveryContentType
+        }
+      });
+    } else {
+      const deliveryBuffer = await deliveryFile.arrayBuffer();
 
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS events (
-        id TEXT PRIMARY KEY,
-        collection_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      )
-    `).run();
-
-    await env.DB.prepare(`
-      CREATE TABLE IF NOT EXISTS images (
-        id TEXT PRIMARY KEY,
-        collection_id TEXT NOT NULL,
-        event_id TEXT NOT NULL,
-        file_name TEXT NOT NULL,
-        display_key TEXT NOT NULL,
-        watermark_text TEXT,
-        price_cents INTEGER NOT NULL,
-        created_at TEXT NOT NULL
-      )
-    `).run();
+      await env.DISPLAY_BUCKET.put(deliveryKey, deliveryBuffer, {
+        httpMetadata: {
+          contentType: deliveryContentType
+        }
+      });
+    }
 
     await env.DB.prepare(`
       INSERT OR REPLACE INTO collections (id, name, created_at)
@@ -1194,17 +1256,19 @@ async function handleUploadDisplay(request, env) {
         event_id,
         file_name,
         display_key,
+        delivery_key,
         watermark_text,
         price_cents,
         created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       imageId,
       collectionId,
       eventId,
-      file.name || originalName,
+      deliveryFile.name || displayFile.name || originalName,
       displayKey,
+      deliveryKey,
       watermarkText,
       priceCents,
       checkedAt
@@ -1215,6 +1279,7 @@ async function handleUploadDisplay(request, env) {
         images.id,
         images.file_name,
         images.display_key,
+        images.delivery_key,
         images.watermark_text,
         images.price_cents,
         images.event_id,
@@ -1287,6 +1352,8 @@ async function handleDeleteImage(request, env) {
   }
 
   try {
+    await ensureCoreTables(env);
+
     const body = await request.json();
     const imageId = body && body.imageId ? String(body.imageId).trim() : "";
 
@@ -1307,6 +1374,7 @@ async function handleDeleteImage(request, env) {
         id,
         file_name,
         display_key,
+        delivery_key,
         collection_id,
         event_id
       FROM images
@@ -1330,6 +1398,10 @@ async function handleDeleteImage(request, env) {
       await env.DISPLAY_BUCKET.delete(image.display_key);
     }
 
+    if (image.delivery_key && image.delivery_key !== image.display_key) {
+      await env.DISPLAY_BUCKET.delete(image.delivery_key);
+    }
+
     await env.DB.prepare(`
       DELETE FROM images
       WHERE id = ?
@@ -1343,6 +1415,7 @@ async function handleDeleteImage(request, env) {
         id: image.id,
         file_name: image.file_name,
         display_key: image.display_key,
+        delivery_key: image.delivery_key,
         collection_id: image.collection_id,
         event_id: image.event_id
       },
@@ -1400,6 +1473,8 @@ async function handleDeleteEvent(request, env) {
   }
 
   try {
+    await ensureCoreTables(env);
+
     const body = await request.json();
 
     const collectionId = body && body.collectionId ? String(body.collectionId).trim() : "";
@@ -1458,7 +1533,8 @@ async function handleDeleteEvent(request, env) {
       SELECT
         id,
         file_name,
-        display_key
+        display_key,
+        delivery_key
       FROM images
       WHERE collection_id = ?
       AND event_id = ?
@@ -1469,6 +1545,10 @@ async function handleDeleteEvent(request, env) {
     for (const image of images) {
       if (image.display_key) {
         await env.DISPLAY_BUCKET.delete(image.display_key);
+      }
+
+      if (image.delivery_key && image.delivery_key !== image.display_key) {
+        await env.DISPLAY_BUCKET.delete(image.delivery_key);
       }
     }
 
@@ -1548,6 +1628,8 @@ async function handleDeleteCollection(request, env) {
   }
 
   try {
+    await ensureCoreTables(env);
+
     const body = await request.json();
 
     const collectionId = body && body.collectionId ? String(body.collectionId).trim() : "";
@@ -1603,6 +1685,7 @@ async function handleDeleteCollection(request, env) {
         id,
         file_name,
         display_key,
+        delivery_key,
         event_id
       FROM images
       WHERE collection_id = ?
@@ -1623,11 +1706,17 @@ async function handleDeleteCollection(request, env) {
     let missingFileCount = 0;
 
     for (const image of images) {
-      if (image.display_key) {
-        const object = await env.DISPLAY_BUCKET.get(image.display_key);
+      const keysToDelete = Array.from(new Set(
+        [image.display_key, image.delivery_key]
+          .map((key) => String(key || "").trim())
+          .filter(Boolean)
+      ));
+
+      for (const key of keysToDelete) {
+        const object = await env.DISPLAY_BUCKET.get(key);
 
         if (object) {
-          await env.DISPLAY_BUCKET.delete(image.display_key);
+          await env.DISPLAY_BUCKET.delete(key);
           deletedFileCount += 1;
         } else {
           missingFileCount += 1;
@@ -1705,6 +1794,8 @@ async function handleUpdateEventPrice(request, env) {
   }
 
   try {
+    await ensureCoreTables(env);
+
     const body = await request.json();
 
     const collectionId = body && body.collectionId ? String(body.collectionId).trim() : "";
