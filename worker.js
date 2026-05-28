@@ -1873,6 +1873,60 @@ async function handleUpdateEventPrice(request, env) {
   }
 }
 
+
+async function handleTestEmail(request, env) {
+  if (request.method !== "GET") {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Test email",
+        error: "Use GET."
+      },
+      405
+    );
+  }
+
+  if (!env.RESEND_API_KEY) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Test email",
+        error: "RESEND_API_KEY is not available in Cloudflare."
+      },
+      500
+    );
+  }
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      from: "FOTODECK <downloads@send.fotodeck.app>",
+      to: ["moffcast@gmail.com"],
+      subject: "FOTODECK test email",
+      html: "<p>FOTODECK email sending is working.</p>"
+    })
+  });
+
+  const result = await response.json();
+
+  return jsonResponse(
+    {
+      ok: response.ok,
+      app: "FOTODECK",
+      service: "Test email",
+      resendStatus: response.status,
+      resendResult: result
+    },
+    response.ok ? 200 : 500
+  );
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -1923,6 +1977,10 @@ export default {
 
     if (url.pathname === "/api/download-purchased-image") {
       return handleDownloadPurchasedImage(request, env);
+    }
+
+    if (url.pathname === "/api/test-email") {
+      return handleTestEmail(request, env);
     }
 
     if (env.ASSETS) {
