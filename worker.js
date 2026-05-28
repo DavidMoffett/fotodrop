@@ -1906,7 +1906,7 @@ async function handleTestEmail(request, env) {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      from: "FOTODECK <downloads@send.fotodeck.app>",
+      from: "FOTODECK <downloads@fotodeck.app>",
       to: ["moffcast@gmail.com"],
       subject: "FOTODECK test email",
       html: "<p>FOTODECK email sending is working.</p>"
