@@ -2298,19 +2298,19 @@ function App() {
                   textAlign: 'left',
                 }}
               >
-                <strong style={{ color: '#dc2626', fontSize: '1rem' }}>IMPORTANT NOTICE</strong>
+                <strong style={{ color: '#dc2626', fontSize: '1rem' }}>YOUR IMAGES WILL BE DOWNLOADED TO YOUR EMAIL</strong>
                 <br />
                 <br />
                 <span style={{ color: '#991b1b' }}>
-                  After card payment, FOTODECK will bring you back to this site. Do not close the browser.
+                  After payment, FOTODECK will email your download link to the email address entered below.
                 </span>
                 <br />
                 <span style={{ color: '#991b1b' }}>
-                  Your download buttons will appear on the payment-success screen. Tap Download beside each purchased photo.
+                  Open that email and tap the download link to get your purchased images.
                 </span>
                 <br />
                 <span style={{ color: '#991b1b' }}>
-                  Download links are not automatically emailed yet.
+                  Check your inbox after payment. If it is not there, check junk or spam.
                 </span>
                 <br />
                 <br />
