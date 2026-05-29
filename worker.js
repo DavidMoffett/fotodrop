@@ -44,6 +44,144 @@ function makeDownloadFileName(fileName) {
   return `${cleanName}.jpg`;
 }
 
+function htmlEscape(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function makePaidDownloadPageUrl(request, order) {
+  const origin = getRequestOrigin(request);
+  const collectionId = encodeURIComponent(order.collection_id);
+  const eventId = encodeURIComponent(order.event_id);
+  const sessionId = encodeURIComponent(order.stripe_session_id);
+
+  return `${origin}/view?collectionId=${collectionId}&eventId=${eventId}&stripe=success&session_id=${sessionId}`;
+}
+
+function makeStripeWebhookPayload(timestamp, rawBody) {
+  return `${timestamp}.${rawBody}`;
+}
+
+function parseStripeSignatureHeader(signatureHeader) {
+  const parts = String(signatureHeader || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const parsed = {
+    timestamp: "",
+    signatures: []
+  };
+
+  for (const part of parts) {
+    const equalIndex = part.indexOf("=");
+
+    if (equalIndex === -1) {
+      continue;
+    }
+
+    const key = part.slice(0, equalIndex);
+    const value = part.slice(equalIndex + 1);
+
+    if (key === "t") {
+      parsed.timestamp = value;
+    }
+
+    if (key === "v1") {
+      parsed.signatures.push(value);
+    }
+  }
+
+  return parsed;
+}
+
+function bytesToHex(buffer) {
+  return Array.from(new Uint8Array(buffer))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function timingSafeEqualHex(left, right) {
+  const leftText = String(left || "");
+  const rightText = String(right || "");
+
+  if (leftText.length !== rightText.length) {
+    return false;
+  }
+
+  let result = 0;
+
+  for (let index = 0; index < leftText.length; index += 1) {
+    result |= leftText.charCodeAt(index) ^ rightText.charCodeAt(index);
+  }
+
+  return result === 0;
+}
+
+async function makeStripeWebhookSignature(secret, payload) {
+  const encoder = new TextEncoder();
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    {
+      name: "HMAC",
+      hash: "SHA-256"
+    },
+    false,
+    ["sign"]
+  );
+
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(payload)
+  );
+
+  return bytesToHex(signature);
+}
+
+async function verifyStripeWebhookSignature(request, rawBody, env) {
+  if (!env.STRIPE_WEBHOOK_SECRET) {
+    throw new Error("STRIPE_WEBHOOK_SECRET is missing");
+  }
+
+  const signatureHeader = request.headers.get("stripe-signature") || "";
+  const parsedSignature = parseStripeSignatureHeader(signatureHeader);
+
+  if (!parsedSignature.timestamp || parsedSignature.signatures.length === 0) {
+    throw new Error("Stripe webhook signature header is invalid");
+  }
+
+  const timestampNumber = Number(parsedSignature.timestamp);
+
+  if (!Number.isFinite(timestampNumber)) {
+    throw new Error("Stripe webhook timestamp is invalid");
+  }
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const ageSeconds = Math.abs(nowSeconds - timestampNumber);
+
+  if (ageSeconds > 300) {
+    throw new Error("Stripe webhook timestamp is too old");
+  }
+
+  const payload = makeStripeWebhookPayload(parsedSignature.timestamp, rawBody);
+  const expectedSignature = await makeStripeWebhookSignature(env.STRIPE_WEBHOOK_SECRET, payload);
+
+  const isValid = parsedSignature.signatures.some((signature) => (
+    timingSafeEqualHex(signature, expectedSignature)
+  ));
+
+  if (!isValid) {
+    throw new Error("Stripe webhook signature verification failed");
+  }
+}
+
 async function ensureColumn(env, tableName, columnName, columnDefinition) {
   try {
     await env.DB.prepare(`
@@ -126,6 +264,9 @@ async function ensureStripeTables(env) {
   `).run();
 
   await ensureColumn(env, "stripe_order_items", "delivery_key", "TEXT");
+  await ensureColumn(env, "stripe_orders", "download_email_sent_at", "TEXT");
+  await ensureColumn(env, "stripe_orders", "download_email_resend_id", "TEXT");
+  await ensureColumn(env, "stripe_orders", "download_email_error", "TEXT");
 }
 
 async function getStripeSession(env, sessionId) {
@@ -173,7 +314,10 @@ async function getPaidOrderFromSession(env, sessionId) {
       amount_cents,
       currency,
       status,
-      created_at
+      created_at,
+      download_email_sent_at,
+      download_email_resend_id,
+      download_email_error
     FROM stripe_orders
     WHERE stripe_session_id = ?
   `).bind(sessionId).first();
@@ -198,6 +342,210 @@ async function getPaidOrderFromSession(env, sessionId) {
     order,
     stripeSession
   };
+}
+
+async function getStripeOrderBySessionId(env, sessionId) {
+  await ensureStripeTables(env);
+
+  const order = await env.DB.prepare(`
+    SELECT
+      id,
+      stripe_session_id,
+      collection_id,
+      event_id,
+      buyer_email,
+      amount_cents,
+      currency,
+      status,
+      created_at,
+      download_email_sent_at,
+      download_email_resend_id,
+      download_email_error
+    FROM stripe_orders
+    WHERE stripe_session_id = ?
+  `).bind(sessionId).first();
+
+  if (!order) {
+    return null;
+  }
+
+  return order;
+}
+
+async function getStripeOrderItems(env, orderId) {
+  await ensureStripeTables(env);
+
+  const itemsResult = await env.DB.prepare(`
+    SELECT
+      id,
+      order_id,
+      image_id,
+      file_name,
+      display_key,
+      delivery_key,
+      price_cents,
+      created_at
+    FROM stripe_order_items
+    WHERE order_id = ?
+    ORDER BY created_at ASC
+  `).bind(orderId).all();
+
+  return itemsResult.results || [];
+}
+
+async function sendPaidDownloadEmail(request, env, order, items) {
+  if (!env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY is missing");
+  }
+
+  if (!order || !order.buyer_email) {
+    throw new Error("Buyer email is missing");
+  }
+
+  const checkedAt = new Date().toISOString();
+  const downloadPageUrl = makePaidDownloadPageUrl(request, order);
+  const photoCount = items.length;
+  const subject = photoCount === 1
+    ? "Your FOTODECK image download"
+    : "Your FOTODECK image downloads";
+
+  const safeBuyerEmail = htmlEscape(order.buyer_email);
+  const safeDownloadPageUrl = htmlEscape(downloadPageUrl);
+  const safeAmount = htmlEscape(`${order.currency || "NZD"} ${makeMoneyAmount(order.amount_cents)}`);
+
+  const imageRows = items.map((item) => {
+    const safeName = htmlEscape(item.file_name || "FOTODECK image");
+
+    return `<li>${safeName}</li>`;
+  }).join("");
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #111827; line-height: 1.5;">
+      <h2 style="margin: 0 0 12px;">Your FOTODECK images are ready</h2>
+      <p>Thank you for your payment.</p>
+      <p>
+        <a href="${safeDownloadPageUrl}" style="display: inline-block; padding: 12px 16px; background: #111827; color: #ffffff; text-decoration: none; border-radius: 6px;">
+          Download your images
+        </a>
+      </p>
+      <p>If the button does not open, copy and paste this link into your browser:</p>
+      <p><a href="${safeDownloadPageUrl}">${safeDownloadPageUrl}</a></p>
+      <p><strong>Order:</strong> ${htmlEscape(order.stripe_session_id)}</p>
+      <p><strong>Email:</strong> ${safeBuyerEmail}</p>
+      <p><strong>Total:</strong> ${safeAmount}</p>
+      <p><strong>Images:</strong> ${photoCount}</p>
+      <ul>${imageRows}</ul>
+      <p style="font-size: 12px; color: #6b7280;">This email was sent by FOTODECK.</p>
+    </div>
+  `;
+
+  const text = [
+    "Your FOTODECK images are ready.",
+    "",
+    "Download your images here:",
+    downloadPageUrl,
+    "",
+    `Order: ${order.stripe_session_id}`,
+    `Email: ${order.buyer_email}`,
+    `Total: ${order.currency || "NZD"} ${makeMoneyAmount(order.amount_cents)}`,
+    `Images: ${photoCount}`,
+    "",
+    ...items.map((item) => `- ${item.file_name || "FOTODECK image"}`)
+  ].join("\n");
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      from: "FOTODECK <downloads@fotodeck.app>",
+      to: [order.buyer_email],
+      subject,
+      html,
+      text
+    })
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    const message = result && result.message
+      ? result.message
+      : "Resend email failed";
+
+    await env.DB.prepare(`
+      UPDATE stripe_orders
+      SET download_email_error = ?
+      WHERE id = ?
+    `).bind(message, order.id).run();
+
+    throw new Error(message);
+  }
+
+  await env.DB.prepare(`
+    UPDATE stripe_orders
+    SET download_email_sent_at = ?,
+        download_email_resend_id = ?,
+        download_email_error = NULL
+    WHERE id = ?
+  `).bind(
+    checkedAt,
+    result.id || "",
+    order.id
+  ).run();
+
+  return {
+    sent: true,
+    resend_id: result.id || null,
+    sent_at: checkedAt,
+    download_page_url: downloadPageUrl
+  };
+}
+
+async function sendPaidDownloadEmailForSession(request, env, sessionId) {
+  await ensureStripeTables(env);
+
+  const order = await getStripeOrderBySessionId(env, sessionId);
+
+  if (!order) {
+    return {
+      sent: false,
+      skipped: true,
+      reason: "Order was not found for Stripe session",
+      stripe_session_id: sessionId
+    };
+  }
+
+  if (order.download_email_sent_at) {
+    return {
+      sent: false,
+      skipped: true,
+      reason: "Download email was already sent",
+      stripe_session_id: sessionId,
+      sent_at: order.download_email_sent_at,
+      resend_id: order.download_email_resend_id || null
+    };
+  }
+
+  if (order.status !== "PAID") {
+    await env.DB.prepare(`
+      UPDATE stripe_orders
+      SET status = ?
+      WHERE id = ?
+    `).bind("PAID", order.id).run();
+
+    order.status = "PAID";
+  }
+
+  const items = await getStripeOrderItems(env, order.id);
+
+  if (items.length === 0) {
+    throw new Error("Paid order has no image items");
+  }
+
+  return sendPaidDownloadEmail(request, env, order, items);
 }
 
 async function getCartImagesFromDb(env, collectionId, eventId, imageIds) {
@@ -533,22 +881,7 @@ async function handlePurchasedImages(request, env) {
     const paidOrder = await getPaidOrderFromSession(env, sessionId);
     const order = paidOrder.order;
 
-    const itemsResult = await env.DB.prepare(`
-      SELECT
-        id,
-        order_id,
-        image_id,
-        file_name,
-        display_key,
-        delivery_key,
-        price_cents,
-        created_at
-      FROM stripe_order_items
-      WHERE order_id = ?
-      ORDER BY created_at ASC
-    `).bind(order.id).all();
-
-    const items = itemsResult.results || [];
+    const items = await getStripeOrderItems(env, order.id);
 
     return jsonResponse({
       ok: true,
@@ -1873,7 +2206,6 @@ async function handleUpdateEventPrice(request, env) {
   }
 }
 
-
 async function handleTestEmail(request, env) {
   if (request.method !== "GET") {
     return jsonResponse(
@@ -1925,6 +2257,104 @@ async function handleTestEmail(request, env) {
     },
     response.ok ? 200 : 500
   );
+}
+
+async function handleStripeWebhook(request, env) {
+  if (request.method !== "POST") {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Stripe webhook",
+        error: "Use POST"
+      },
+      405
+    );
+  }
+
+  if (!env.DB) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Stripe webhook",
+        error: "D1 binding DB is missing"
+      },
+      500
+    );
+  }
+
+  try {
+    const rawBody = await request.text();
+
+    await verifyStripeWebhookSignature(request, rawBody, env);
+
+    const event = JSON.parse(rawBody);
+
+    if (
+      event.type !== "checkout.session.completed" &&
+      event.type !== "checkout.session.async_payment_succeeded"
+    ) {
+      return jsonResponse({
+        ok: true,
+        app: "FOTODECK",
+        service: "Stripe webhook",
+        ignored: true,
+        event_type: event.type || null
+      });
+    }
+
+    const session = event && event.data && event.data.object
+      ? event.data.object
+      : null;
+
+    if (!session || !session.id) {
+      return jsonResponse(
+        {
+          ok: false,
+          app: "FOTODECK",
+          service: "Stripe webhook",
+          error: "Stripe checkout session was missing"
+        },
+        400
+      );
+    }
+
+    if (session.payment_status !== "paid") {
+      return jsonResponse({
+        ok: true,
+        app: "FOTODECK",
+        service: "Stripe webhook",
+        ignored: true,
+        reason: "Session is not paid",
+        stripe_session_id: session.id,
+        payment_status: session.payment_status || null
+      });
+    }
+
+    const emailResult = await sendPaidDownloadEmailForSession(request, env, session.id);
+
+    return jsonResponse({
+      ok: true,
+      app: "FOTODECK",
+      service: "Stripe webhook",
+      event_type: event.type,
+      stripe_session_id: session.id,
+      email: emailResult,
+      checkedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Stripe webhook",
+        error: error.message,
+        checkedAt: new Date().toISOString()
+      },
+      400
+    );
+  }
 }
 
 export default {
@@ -1981,6 +2411,10 @@ export default {
 
     if (url.pathname === "/api/test-email") {
       return handleTestEmail(request, env);
+    }
+
+    if (url.pathname === "/api/stripe-webhook") {
+      return handleStripeWebhook(request, env);
     }
 
     if (env.ASSETS) {
