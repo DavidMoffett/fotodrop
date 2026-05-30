@@ -2465,6 +2465,111 @@ function App() {
           </section>
         )}
 
+        {isStatsOpen && (
+          <section
+            aria-label="Admin stats"
+            style={{
+              position: 'fixed',
+              top: 0,
+              right: 0,
+              width: 'min(420px, 92vw)',
+              height: '100vh',
+              zIndex: 40,
+              background: '#f8fafc',
+              boxShadow: '-18px 0 45px rgba(17, 24, 39, 0.22)',
+              padding: '22px',
+              overflowY: 'auto',
+              boxSizing: 'border-box',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                marginBottom: '18px',
+              }}
+            >
+              <div>
+                <p className="soft-label">Admin</p>
+                <h1 style={smallHeadingStyle}>Stats</h1>
+              </div>
+
+              <button type="button" onClick={() => setIsStatsOpen(false)}>
+                Close
+              </button>
+            </div>
+
+            <div className="empty-photo-space" style={{ marginBottom: '14px' }}>
+              <strong>{statsStatus}</strong>
+            </div>
+
+            {statsData && (
+              <div style={{ display: 'grid', gap: '14px' }}>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '10px',
+                  }}
+                >
+                  <div className="empty-photo-space">
+                    <span>Total sales</span>
+                    <br />
+                    <strong>NZ${statsData.totals?.revenue || '0.00'}</strong>
+                  </div>
+
+                  <div className="empty-photo-space">
+                    <span>Orders</span>
+                    <br />
+                    <strong>{statsData.totals?.order_count || 0}</strong>
+                  </div>
+
+                  <div className="empty-photo-space">
+                    <span>Images sold</span>
+                    <br />
+                    <strong>{statsData.totals?.image_count || 0}</strong>
+                  </div>
+
+                  <div className="empty-photo-space">
+                    <span>Image revenue</span>
+                    <br />
+                    <strong>NZ${statsData.totals?.image_revenue || '0.00'}</strong>
+                  </div>
+                </div>
+
+                <section className="studio-preview">
+                  <div className="preview-heading" style={{ marginBottom: '10px' }}>
+                    <div>
+                      <p className="soft-label">Recent</p>
+                      <h1 style={smallHeadingStyle}>Orders</h1>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gap: '8px' }}>
+                    {(statsData.recent_orders || []).length === 0 && (
+                      <div className="empty-photo-space">
+                        No paid orders yet.
+                      </div>
+                    )}
+
+                    {(statsData.recent_orders || []).slice(0, 10).map((order) => (
+                      <div key={order.id} className="empty-photo-space" style={{ textAlign: 'left' }}>
+                        <strong>{order.currency || 'NZD'} {order.amount || '0.00'}</strong>
+                        <br />
+                        <span>{order.buyer_email}</span>
+                        <br />
+                        <span>{order.collection_id} / {order.event_id}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            )}
+          </section>
+        )}
+
         {selectedPhoto && (
           <section className="lightbox" aria-label="Selected photo">
             <div className="lightbox-card">
