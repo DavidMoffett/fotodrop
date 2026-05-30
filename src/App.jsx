@@ -298,6 +298,34 @@ function App() {
     setView('photo-grid')
   }
 
+  function getSelectedPhotoIndex() {
+    if (!selectedPhoto) {
+      return -1
+    }
+
+    return photos.findIndex((photo) => photo.id === selectedPhoto.id)
+  }
+
+  function handlePreviousSelectedPhoto() {
+    const selectedIndex = getSelectedPhotoIndex()
+
+    if (selectedIndex <= 0) {
+      return
+    }
+
+    setSelectedPhoto(photos[selectedIndex - 1])
+  }
+
+  function handleNextSelectedPhoto() {
+    const selectedIndex = getSelectedPhotoIndex()
+
+    if (selectedIndex < 0 || selectedIndex >= photos.length - 1) {
+      return
+    }
+
+    setSelectedPhoto(photos[selectedIndex + 1])
+  }
+
   function handleRemoveFromCart(photo) {
     setCartItems((currentItems) => currentItems.filter((item) => item.id !== photo.id))
     setCartStatus(`Removed ${photo.name}`)
@@ -2428,9 +2456,17 @@ function App() {
               </div>
 
               <div className="lightbox-bottom">
+                <button type="button" onClick={handlePreviousSelectedPhoto} disabled={getSelectedPhotoIndex() <= 0}>
+                  Previous
+                </button>
+
                 <p>
                   NZ${getPhotoPrice(selectedPhoto).toFixed(2)}
                 </p>
+
+                <button type="button" onClick={handleNextSelectedPhoto} disabled={getSelectedPhotoIndex() < 0 || getSelectedPhotoIndex() >= photos.length - 1}>
+                  Next
+                </button>
 
                 <button type="button" onClick={() => handleLightboxCartAction(selectedPhoto)}>
                   {isPhotoInCart(selectedPhoto) ? 'Back to photos' : 'Add to cart'}
