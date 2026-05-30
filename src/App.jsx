@@ -123,6 +123,10 @@ function App() {
   const [signupEmail, setSignupEmail] = useState('')
   const [signupPhone, setSignupPhone] = useState('')
   const [signupStatus, setSignupStatus] = useState('')
+  const [isStatsOpen, setIsStatsOpen] = useState(false)
+  const [isLoadingStats, setIsLoadingStats] = useState(false)
+  const [statsStatus, setStatsStatus] = useState('Stats not loaded')
+  const [statsData, setStatsData] = useState(null)
 
   useEffect(() => {
     async function loadPublicViewFromUrl() {
@@ -1329,6 +1333,32 @@ function App() {
     window.location.href = '/view'
   }
 
+
+  async function handleOpenStats() {
+    setIsStatsOpen(true)
+    setIsLoadingStats(true)
+    setStatsStatus('Loading stats...')
+
+    try {
+      const response = await fetch('/api/admin-stats')
+      const result = await response.json()
+
+      if (!response.ok || !result.ok) {
+        setStatsData(null)
+        setStatsStatus(result.error || 'Stats could not be loaded')
+        setIsLoadingStats(false)
+        return
+      }
+
+      setStatsData(result)
+      setStatsStatus('Stats loaded')
+      setIsLoadingStats(false)
+    } catch (error) {
+      setStatsData(null)
+      setStatsStatus(error.message || 'Stats could not be loaded')
+      setIsLoadingStats(false)
+    }
+  }
   function handleReset() {
     const message = isUploading
       ? 'Uploads may still be running in the background. Reset only clears the screen. Continue?'
@@ -1647,6 +1677,9 @@ function App() {
                 </button>
                 <button type="button" onClick={handleOpenCustomerView}>
                   Open customer view
+                </button>
+                <button type="button" onClick={handleOpenStats} disabled={isLoadingStats}>
+                  {isLoadingStats ? 'Loading stats...' : 'Stats'}
                 </button>
                 <button type="button" onClick={() => handleLoadSavedPhotos()}>
                   Load current event
