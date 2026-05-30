@@ -2239,7 +2239,7 @@ async function handleAdminStats(request, env) {
       COUNT(*) AS order_count,
       COALESCE(SUM(amount_cents), 0) AS revenue_cents
     FROM stripe_orders
-    WHERE status = 'paid'
+    WHERE status = 'PAID'
   `).first();
 
   const imageTotals = await env.DB.prepare(`
@@ -2250,7 +2250,7 @@ async function handleAdminStats(request, env) {
     WHERE order_id IN (
       SELECT id
       FROM stripe_orders
-      WHERE status = 'paid'
+      WHERE status = 'PAID'
     )
   `).first();
 
@@ -2281,7 +2281,7 @@ async function handleAdminStats(request, env) {
       created_at,
       download_email_sent_at
     FROM stripe_orders
-    WHERE status = 'paid'
+    WHERE status = 'PAID'
     ORDER BY created_at DESC
     LIMIT 20
   `).all();
