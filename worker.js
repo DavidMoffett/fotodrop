@@ -2206,6 +2206,125 @@ async function handleUpdateEventPrice(request, env) {
   }
 }
 
+
+async function handleAdminStats(request, env) {
+  if (request.method !== "GET") {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Admin stats",
+        error: "Use GET."
+      },
+      405
+    );
+  }
+
+  if (!env.DB) {
+    return jsonResponse(
+      {
+        ok: false,
+        app: "FOTODECK",
+        service: "Admin stats",
+        error: "D1 database binding DB is not available."
+      },
+      500
+    );
+  }
+
+  await ensureStripeTables(env);
+
+  const orderTotals = await env.DB.prepare(`
+    SELECT
+      COUNT(*) AS order_count,
+      COALESCE(SUM(amount_cents), 0) AS revenue_cents
+    FROM stripe_orders
+    WHERE status = 'paid'
+  `).first();
+
+  const imageTotals = await env.DB.prepare(`
+    SELECT
+      COUNT(*) AS image_count,
+      COALESCE(SUM(price_cents), 0) AS image_revenue_cents
+    FROM stripe_order_items
+    WHERE order_id IN (
+      SELECT id
+      FROM stripe_orders
+      WHERE status = 'paid'
+    )
+  `).first();
+
+  const byEventResult = await env.DB.prepare(`
+    SELECT
+      o.collection_id,
+      o.event_id,
+      COUNT(DISTINCT o.id) AS order_count,
+      COUNT(i.id) AS image_count,
+      COALESCE(SUM(i.price_cents), 0) AS revenue_cents
+    FROM stripe_orders o
+    LEFT JOIN stripe_order_items i ON i.order_id = o.id
+    WHERE o.status = 'paid'
+    GROUP BY o.collection_id, o.event_id
+    ORDER BY revenue_cents DESC, order_count DESC, o.created_at DESC
+  `).all();
+
+  const recentOrdersResult = await env.DB.prepare(`
+    SELECT
+      id,
+      stripe_session_id,
+      collection_id,
+      event_id,
+      buyer_email,
+      amount_cents,
+      currency,
+      status,
+      created_at,
+      download_email_sent_at
+    FROM stripe_orders
+    WHERE status = 'paid'
+    ORDER BY created_at DESC
+    LIMIT 20
+  `).all();
+
+  const byEvent = (byEventResult.results || []).map((row) => ({
+    collection_id: row.collection_id || "",
+    event_id: row.event_id || "",
+    order_count: Number(row.order_count || 0),
+    image_count: Number(row.image_count || 0),
+    revenue_cents: Number(row.revenue_cents || 0),
+    revenue: makeMoneyAmount(row.revenue_cents || 0)
+  }));
+
+  const recentOrders = (recentOrdersResult.results || []).map((row) => ({
+    id: row.id || "",
+    stripe_session_id: row.stripe_session_id || "",
+    collection_id: row.collection_id || "",
+    event_id: row.event_id || "",
+    buyer_email: row.buyer_email || "",
+    amount_cents: Number(row.amount_cents || 0),
+    amount: makeMoneyAmount(row.amount_cents || 0),
+    currency: row.currency || "NZD",
+    status: row.status || "",
+    created_at: row.created_at || "",
+    download_email_sent_at: row.download_email_sent_at || ""
+  }));
+
+  return jsonResponse({
+    ok: true,
+    app: "FOTODECK",
+    service: "Admin stats",
+    totals: {
+      order_count: Number(orderTotals?.order_count || 0),
+      revenue_cents: Number(orderTotals?.revenue_cents || 0),
+      revenue: makeMoneyAmount(orderTotals?.revenue_cents || 0),
+      image_count: Number(imageTotals?.image_count || 0),
+      image_revenue_cents: Number(imageTotals?.image_revenue_cents || 0),
+      image_revenue: makeMoneyAmount(imageTotals?.image_revenue_cents || 0)
+    },
+    by_event: byEvent,
+    recent_orders: recentOrders
+  });
+}
 async function handleStripeWebhook(request, env) {
   if (request.method !== "POST") {
     return jsonResponse(
@@ -2344,6 +2463,9 @@ export default {
       return handleUpdateEventPrice(request, env);
     }
 
+    if (url.pathname === "/api/admin-stats") {
+      return handleAdminStats(request, env);
+    }
     if (url.pathname === "/api/stripe-create-checkout") {
       return handleStripeCreateCheckout(request, env);
     }
