@@ -2206,59 +2206,6 @@ async function handleUpdateEventPrice(request, env) {
   }
 }
 
-async function handleTestEmail(request, env) {
-  if (request.method !== "GET") {
-    return jsonResponse(
-      {
-        ok: false,
-        app: "FOTODECK",
-        service: "Test email",
-        error: "Use GET."
-      },
-      405
-    );
-  }
-
-  if (!env.RESEND_API_KEY) {
-    return jsonResponse(
-      {
-        ok: false,
-        app: "FOTODECK",
-        service: "Test email",
-        error: "RESEND_API_KEY is not available in Cloudflare."
-      },
-      500
-    );
-  }
-
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.RESEND_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      from: "FOTODECK <downloads@fotodeck.app>",
-      to: ["moffcast@gmail.com"],
-      subject: "FOTODECK test email",
-      html: "<p>FOTODECK email sending is working.</p>"
-    })
-  });
-
-  const result = await response.json();
-
-  return jsonResponse(
-    {
-      ok: response.ok,
-      app: "FOTODECK",
-      service: "Test email",
-      resendStatus: response.status,
-      resendResult: result
-    },
-    response.ok ? 200 : 500
-  );
-}
-
 async function handleStripeWebhook(request, env) {
   if (request.method !== "POST") {
     return jsonResponse(
@@ -2409,9 +2356,6 @@ export default {
       return handleDownloadPurchasedImage(request, env);
     }
 
-    if (url.pathname === "/api/test-email") {
-      return handleTestEmail(request, env);
-    }
 
     if (url.pathname === "/api/stripe-webhook") {
       return handleStripeWebhook(request, env);
